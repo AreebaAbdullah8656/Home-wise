@@ -3,13 +3,7 @@ import {
   LayoutDashboard,
   Wallet,
   Receipt,
-  ScanLine,
-  FileStack,
-  PiggyBank,
   ShoppingCart,
-  Home,
-  Lightbulb,
-  Sparkles,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -21,7 +15,10 @@ export type NavItem = {
   description: string;
 };
 
-/** SPEC §16 sidebar sections — every item must be a real route. */
+/**
+ * Deploy-ready sidebar only — unfinished SPEC sections stay out of nav
+ * (Scan a Bill, My Bills, Savings, Inventory, Tips, Recommendations).
+ */
 export const NAV_ITEMS: NavItem[] = [
   {
     title: "Dashboard",
@@ -42,46 +39,10 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Track daily spending",
   },
   {
-    title: "Scan a Bill",
-    href: "/scan-bill",
-    icon: ScanLine,
-    description: "Optional bill upload and review",
-  },
-  {
-    title: "My Bills",
-    href: "/bills",
-    icon: FileStack,
-    description: "Digital bill wallet",
-  },
-  {
-    title: "Savings & Emergency",
-    href: "/savings",
-    icon: PiggyBank,
-    description: "Savings and emergency funds",
-  },
-  {
     title: "Grocery List",
     href: "/grocery",
     icon: ShoppingCart,
     description: "Plan and track groceries",
-  },
-  {
-    title: "Home Inventory",
-    href: "/inventory",
-    icon: Home,
-    description: "Household stock and supplies",
-  },
-  {
-    title: "Smart Saving Tips",
-    href: "/tips",
-    icon: Lightbulb,
-    description: "Practical money-saving advice",
-  },
-  {
-    title: "Smart Recommendations",
-    href: "/recommendations",
-    icon: Sparkles,
-    description: "Affordable alternatives",
   },
   {
     title: "Reports",
@@ -96,3 +57,13 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Profile and preferences",
   },
 ];
+
+/** Routes hidden from nav until their phases ship. Direct visits redirect home. */
+export const HIDDEN_FEATURE_ROUTES = [
+  "/scan-bill",
+  "/bills",
+  "/savings",
+  "/inventory",
+  "/tips",
+  "/recommendations",
+] as const;

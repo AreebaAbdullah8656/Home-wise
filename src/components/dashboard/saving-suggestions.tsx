@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -6,19 +5,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { sampleSavingSuggestions } from "@/lib/sample-dashboard";
 
+/** Small optional dashboard tips only — no link to unfinished Tips section. */
 export function SavingSuggestions() {
   return (
     <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="font-heading text-xl">Saving suggestions</CardTitle>
         <CardDescription>
-          Short tips only — open Smart Saving Tips for the full library.
+          Short optional tips on the dashboard. Full tip library comes later.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         <ul className="space-y-3">
           {sampleSavingSuggestions.map((tip) => (
             <li
@@ -29,13 +28,6 @@ export function SavingSuggestions() {
             </li>
           ))}
         </ul>
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<Link href="/tips" />}
-        >
-          Browse all tips
-        </Button>
       </CardContent>
     </Card>
   );

@@ -123,3 +123,15 @@ export function endOfMonthIso(yearMonth: string): string {
   const dayNum = String(end.getDate()).padStart(2, "0");
   return `${y}-${m}-${dayNum}`;
 }
+
+/** Shift a YYYY-MM-DD date by `days` (can be negative). */
+export function addDaysIso(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return todayIso(d);
+}
+
+export function daysInMonth(yearMonth: string): number {
+  const d = new Date(`${yearMonth}T00:00:00`);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
