@@ -13,3 +13,32 @@ export function isSupabaseConfigured(): boolean {
   const { url, anonKey } = getSupabaseEnv();
   return Boolean(url && anonKey);
 }
+
+/** Safe one-line env diagnostics for server logs (never prints secrets). */
+export function getSupabaseEnvDiagnostics() {
+  const { url, anonKey } = getSupabaseEnv();
+  let host: string | null = null;
+  let urlValid = false;
+  try {
+    if (url) {
+      host = new URL(url).host;
+      urlValid = true;
+    }
+  } catch {
+    host = "INVALID_URL";
+  }
+  return {
+    configured: Boolean(url && anonKey),
+    urlHost: host,
+    urlValid,
+    keyLen: anonKey.length,
+    keyFormat: anonKey.startsWith("sb_publishable")
+      ? "sb_publishable"
+      : anonKey.startsWith("eyJ")
+        ? "jwt_anon"
+        : anonKey
+          ? "unknown"
+          : "missing",
+    looksLikePlaceholderHost: Boolean(host && /example\.supabase\.co/i.test(host)),
+  };
+}

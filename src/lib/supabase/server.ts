@@ -3,7 +3,11 @@ import { connection } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
-import { getSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  getSupabaseEnv,
+  getSupabaseEnvDiagnostics,
+  isSupabaseConfigured,
+} from "@/lib/supabase/config";
 
 export async function createClient() {
   if (!isSupabaseConfigured()) {
@@ -16,6 +20,13 @@ export async function createClient() {
   await connection();
 
   const { url, anonKey } = getSupabaseEnv();
+  const diagnostics = getSupabaseEnvDiagnostics();
+  if (diagnostics.looksLikePlaceholderHost) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL points at example.supabase.co. Remove any shell env override, set the real project URL in .env.local, and restart npm run dev."
+    );
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(url, anonKey, {
