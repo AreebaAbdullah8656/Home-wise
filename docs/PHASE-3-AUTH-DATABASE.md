@@ -1,7 +1,8 @@
 # HomeWise — Phase 3 Auth & Database Report
 
 **Status:** Phase 3 complete — awaiting user approval before Phase 4  
-**Date:** 2026-11-16
+**Date:** 2026-11-16  
+**Commit:** `b891e5f352d29350c926b0bf6d4e109d1a5922d4` — *Phase 3: Supabase auth, schema, and RLS* (local only; not pushed)
 
 ---
 
