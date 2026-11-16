@@ -1,6 +1,7 @@
 
 
 
+
 HOMEWISE – SMART HOUSEHOLD BUDGET & EXPENSE MANAGEMENT APPLICATION
 Act as a senior full-stack developer, UI/UX designer, database architect, AI integration specialist, and software tester.
 
@@ -545,7 +546,7 @@ Create:
 README.md.
 Professional project description.
 Features list.
-
+Technology stack.
 Installation instructions.
 Environment variable example.
 Database setup instructions.

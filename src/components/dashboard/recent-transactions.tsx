@@ -9,8 +9,14 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
+import { formatPkr } from "@/lib/format";
+import type { ExpenseWithCategory } from "@/lib/finance/queries";
 
-export function RecentTransactions() {
+type RecentTransactionsProps = {
+  expenses: ExpenseWithCategory[];
+};
+
+export function RecentTransactions({ expenses }: RecentTransactionsProps) {
   return (
     <Card className="shadow-sm">
       <CardHeader>
@@ -20,15 +26,47 @@ export function RecentTransactions() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <EmptyState
-          icon={Receipt}
-          title="No expenses yet"
-          description="When you add expenses (manually or after confirming a scanned bill), they will show up here. Nothing is invented for you."
-        >
-          <Button nativeButton={false} render={<Link href="/expenses" />}>
-            Go to Expenses
-          </Button>
-        </EmptyState>
+        {expenses.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            title="No expenses yet"
+            description="Add an expense manually anytime. Bill upload is never required."
+          >
+            <Button nativeButton={false} render={<Link href="/expenses" />}>
+              Add expense
+            </Button>
+          </EmptyState>
+        ) : (
+          <ul className="space-y-3">
+            {expenses.map((expense) => (
+              <li
+                key={expense.id}
+                className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 px-3 py-3 ring-1 ring-border/50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{expense.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {expense.categories?.name ?? "Uncategorized"} ·{" "}
+                    {expense.expense_date}
+                    {expense.payment_method ? ` · ${expense.payment_method}` : ""}
+                  </p>
+                </div>
+                <p className="shrink-0 font-heading font-semibold">
+                  {formatPkr(Number(expense.amount))}
+                </p>
+              </li>
+            ))}
+            <li>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/expenses" />}
+              >
+                View all expenses
+              </Button>
+            </li>
+          </ul>
+        )}
       </CardContent>
     </Card>
   );

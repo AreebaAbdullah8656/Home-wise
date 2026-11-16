@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -6,38 +7,75 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { SampleBadge } from "@/components/shared/sample-badge";
+import { Button } from "@/components/ui/button";
 import { formatPkr } from "@/lib/format";
-import { sampleCategories } from "@/lib/sample-dashboard";
+import { categoryProgress } from "@/lib/budget-math";
 
-export function BudgetProgress() {
+type CategoryProgressRow = {
+  id: string;
+  name: string;
+  limit: number | null;
+  spent: number;
+};
+
+type BudgetProgressProps = {
+  rows: CategoryProgressRow[];
+};
+
+export function BudgetProgress({ rows }: BudgetProgressProps) {
+  const withLimits = rows.filter((row) => row.limit != null && row.limit > 0);
+  const display = (withLimits.length > 0 ? withLimits : rows).slice(0, 6);
+
   return (
     <Card className="shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between gap-3">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="font-heading text-xl">Budget progress</CardTitle>
-          <CardDescription>Category-wise limits with empty spend so far.</CardDescription>
+          <CardDescription>Category spending this month.</CardDescription>
         </div>
-        <SampleBadge />
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href="/budget" />}
+        >
+          Manage categories
+        </Button>
       </CardHeader>
       <CardContent className="space-y-5">
-        {sampleCategories.map((category) => {
-          const percent =
-            category.limitPkr === 0
-              ? 0
-              : Math.round((category.spentPkr / category.limitPkr) * 100);
-          return (
-            <div key={category.name}>
-              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                <span className="font-medium">{category.name}</span>
-                <span className="text-muted-foreground">
-                  {formatPkr(category.spentPkr)} / {formatPkr(category.limitPkr)}
-                </span>
+        {display.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Categories will appear here after signup defaults load.
+          </p>
+        ) : (
+          display.map((category) => {
+            const progress = categoryProgress(category.limit, category.spent);
+            return (
+              <div key={category.id}>
+                <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium">{category.name}</span>
+                  <span className="text-muted-foreground">
+                    {formatPkr(category.spent)}
+                    {category.limit != null
+                      ? ` / ${formatPkr(category.limit)}`
+                      : ""}
+                  </span>
+                </div>
+                <Progress
+                  value={Math.min(100, progress.percent)}
+                  aria-label={`${category.name} progress`}
+                />
+                {progress.nearLimit || progress.overLimit ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {progress.overLimit
+                      ? `Over limit (${progress.percent}%).`
+                      : `Approaching limit (${progress.percent}%).`}
+                  </p>
+                ) : null}
               </div>
-              <Progress value={percent} aria-label={`${category.name} progress`} />
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );
