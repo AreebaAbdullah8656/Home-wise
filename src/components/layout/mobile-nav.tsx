@@ -13,9 +13,17 @@ import {
 } from "@/components/ui/sheet";
 import { BrandMark } from "@/components/layout/brand-mark";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
-export function MobileNav() {
+type MobileNavProps = {
+  email?: string | null;
+  displayName?: string | null;
+  configured: boolean;
+};
+
+export function MobileNav({ email, displayName, configured }: MobileNavProps) {
   const [open, setOpen] = useState(false);
+  const signedIn = Boolean(email);
 
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border bg-sidebar/90 px-4 py-3 backdrop-blur md:hidden">
@@ -37,15 +45,34 @@ export function MobileNav() {
             <BrandMark />
           </SheetHeader>
           <SidebarNav onNavigate={() => setOpen(false)} />
-          <div className="mt-auto border-t border-sidebar-border p-4">
-            <Button
-              variant="outline"
-              className="w-full"
-              nativeButton={false}
-              render={<Link href="/login" onClick={() => setOpen(false)} />}
-            >
-              Sign in
-            </Button>
+          <div className="mt-auto space-y-2 border-t border-sidebar-border p-4">
+            {signedIn ? (
+              <>
+                <div>
+                  <p className="truncate text-sm font-medium">
+                    {displayName || "Signed in"}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{email}</p>
+                </div>
+                <SignOutButton className="w-full" />
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {configured
+                    ? "Sign in to sync your data."
+                    : "Configure Supabase in .env.local to enable auth."}
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link href="/login" onClick={() => setOpen(false)} />}
+                >
+                  Sign in
+                </Button>
+              </>
+            )}
           </div>
         </SheetContent>
       </Sheet>
