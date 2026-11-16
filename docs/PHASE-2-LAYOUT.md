@@ -2,7 +2,7 @@
 
 **Status:** Phase 2 complete — awaiting user approval before Phase 3  
 **Date:** 2026-11-16  
-**Commit message target:** `Phase 2: layout, theme, and dashboard shell`
+**Commit:** `dc9b76b6d216c30d0b494b2de797a1e4c68b123d` — `Phase 2: layout, theme, and dashboard shell` (local only; not pushed)
 
 ---
 
