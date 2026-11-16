@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { connection } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
@@ -9,6 +11,9 @@ export async function createClient() {
       "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local."
     );
   }
+
+  // Defer past Cache Components prerender — auth-js uses Date.now() internally.
+  await connection();
 
   const { url, anonKey } = getSupabaseEnv();
   const cookieStore = await cookies();
@@ -31,7 +36,8 @@ export async function createClient() {
   });
 }
 
-export async function getSessionUser() {
+/** Request-deduped session read. Safe under Cache Components when awaited inside Suspense. */
+export const getSessionUser = cache(async () => {
   if (!isSupabaseConfigured()) {
     return null;
   }
@@ -42,4 +48,4 @@ export async function getSessionUser() {
     return null;
   }
   return data.user;
-}
+});
