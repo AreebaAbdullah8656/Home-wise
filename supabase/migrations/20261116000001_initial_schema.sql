@@ -120,7 +120,7 @@ create table public.expenses (
   payment_method text,
   notes text,
   source text not null default 'manual'
-    check (source in ('manual', 'natural_language', 'bill')),
+    check (source in ('manual', 'natural_language', 'bill', 'grocery')),
   bill_id uuid references public.bills (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

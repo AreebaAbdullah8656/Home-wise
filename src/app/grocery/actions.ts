@@ -70,21 +70,33 @@ export async function createGroceryItem(
   if (fields.estimated_price !== null && fields.estimated_price < 0) {
     return { error: "Estimated price cannot be negative." };
   }
+  if (fields.actual_price !== null && fields.actual_price < 0) {
+    return { error: "Actual price cannot be negative." };
+  }
 
   try {
     const supabase = await createClient();
-    const { error } = await supabase.from("grocery_items").insert({
-      user_id: auth.user.id,
-      name: fields.name,
-      quantity: fields.quantity,
-      estimated_price: fields.estimated_price,
-      actual_price: fields.actual_price,
-      priority: fields.priority,
-      is_purchased: false,
-    });
+    // Pending items may include an optional actual_price preview; purchased
+    // flow still owns expense creation. Priority must be low|normal|high.
+    const { data, error } = await supabase
+      .from("grocery_items")
+      .insert({
+        user_id: auth.user.id,
+        name: fields.name,
+        quantity: fields.quantity,
+        estimated_price: fields.estimated_price,
+        actual_price: fields.actual_price,
+        priority: fields.priority,
+        is_purchased: false,
+      })
+      .select("id")
+      .single();
     if (error) {
       logAuthFailure("createGroceryItem", error);
       return { error: formatAuthError(error) };
+    }
+    if (!data?.id) {
+      return { error: "Item was not saved. Please try again." };
     }
   } catch (error) {
     logAuthFailure("createGroceryItem", error);
