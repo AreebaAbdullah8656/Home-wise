@@ -3,7 +3,9 @@ import {
   LayoutDashboard,
   Wallet,
   Receipt,
+  PiggyBank,
   ShoppingCart,
+  Home,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -16,8 +18,8 @@ export type NavItem = {
 };
 
 /**
- * Deploy-ready sidebar only — unfinished SPEC sections stay out of nav
- * (Scan a Bill, My Bills, Savings, Inventory, Tips, Recommendations).
+ * Deploy-ready sidebar — unfinished SPEC sections stay out of nav
+ * (Scan a Bill, My Bills, Tips, Recommendations).
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -39,10 +41,22 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Track daily spending",
   },
   {
+    title: "Savings & Emergency",
+    href: "/savings",
+    icon: PiggyBank,
+    description: "Allocated vs actual savings",
+  },
+  {
     title: "Grocery List",
     href: "/grocery",
     icon: ShoppingCart,
     description: "Plan and track groceries",
+  },
+  {
+    title: "Home Inventory",
+    href: "/inventory",
+    icon: Home,
+    description: "Household stock and supplies",
   },
   {
     title: "Reports",
@@ -58,12 +72,10 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Routes hidden from nav until their phases ship. Direct visits redirect home. */
+/** Routes still hidden until their phases ship. Direct visits redirect home. */
 export const HIDDEN_FEATURE_ROUTES = [
   "/scan-bill",
   "/bills",
-  "/savings",
-  "/inventory",
   "/tips",
   "/recommendations",
 ] as const;

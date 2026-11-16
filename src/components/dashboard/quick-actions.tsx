@@ -3,6 +3,8 @@ import {
   PlusCircle,
   Wallet,
   ShoppingCart,
+  PiggyBank,
+  Home,
   BarChart3,
 } from "lucide-react";
 import {
@@ -17,7 +19,9 @@ import { Button } from "@/components/ui/button";
 const actions = [
   { href: "/expenses", label: "Add expense", icon: PlusCircle },
   { href: "/budget", label: "Set monthly budget", icon: Wallet },
+  { href: "/savings", label: "Savings & emergency", icon: PiggyBank },
   { href: "/grocery", label: "Add grocery item", icon: ShoppingCart },
+  { href: "/inventory", label: "Home inventory", icon: Home },
   { href: "/reports", label: "Open reports", icon: BarChart3 },
 ] as const;
 
