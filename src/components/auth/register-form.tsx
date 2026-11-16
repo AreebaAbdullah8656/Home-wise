@@ -25,7 +25,7 @@ export function RegisterForm({ configured }: RegisterFormProps) {
           name="display_name"
           autoComplete="name"
           placeholder="Your name"
-          disabled={!configured || pending}
+          disabled={pending}
         />
       </div>
       <div className="space-y-2">
@@ -37,7 +37,7 @@ export function RegisterForm({ configured }: RegisterFormProps) {
           autoComplete="email"
           placeholder="you@example.com"
           required
-          disabled={!configured || pending}
+          disabled={pending}
         />
       </div>
       <div className="space-y-2">
@@ -50,16 +50,17 @@ export function RegisterForm({ configured }: RegisterFormProps) {
           placeholder="At least 8 characters"
           minLength={8}
           required
-          disabled={!configured || pending}
+          disabled={pending}
         />
       </div>
 
       {!configured ? (
         <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Supabase env vars are missing. Copy{" "}
-          <code className="font-mono">.env.example</code> to{" "}
-          <code className="font-mono">.env.local</code>, add your project URL and
-          anon key, then restart the dev server.
+          Supabase is not connected yet. Create a{" "}
+          <code className="font-mono">.env.local</code> <strong>file</strong> (not a
+          folder) from <code className="font-mono">.env.example</code>, add your project
+          URL and anon key, then restart the dev server. Fields stay editable so you can
+          draft values; account creation needs env + migrations.
         </p>
       ) : null}
 
@@ -78,7 +79,7 @@ export function RegisterForm({ configured }: RegisterFormProps) {
         </p>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={!configured || pending}>
+      <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}
       </Button>
 

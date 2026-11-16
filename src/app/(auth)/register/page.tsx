@@ -11,6 +11,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const metadata: Metadata = { title: "Register" };
 
+// Read env at request time (do not bake configured=false into a static shell).
+export const instant = false;
+
 export default function RegisterPage() {
   const configured = isSupabaseConfigured();
 

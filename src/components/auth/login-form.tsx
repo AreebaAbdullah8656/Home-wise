@@ -29,7 +29,7 @@ export function LoginForm({ configured, nextPath = "/dashboard" }: LoginFormProp
           autoComplete="email"
           placeholder="you@example.com"
           required
-          disabled={!configured || pending}
+          disabled={pending}
         />
       </div>
       <div className="space-y-2">
@@ -41,16 +41,19 @@ export function LoginForm({ configured, nextPath = "/dashboard" }: LoginFormProp
           autoComplete="current-password"
           placeholder="••••••••"
           required
-          disabled={!configured || pending}
+          disabled={pending}
         />
       </div>
 
       {!configured ? (
         <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Supabase env vars are missing. Copy{" "}
-          <code className="font-mono">.env.example</code> to{" "}
-          <code className="font-mono">.env.local</code>, add your project URL and
-          anon key, then restart <code className="font-mono">npm run dev</code>.
+          Supabase is not connected yet. Create a{" "}
+          <code className="font-mono">.env.local</code> <strong>file</strong> (not a
+          folder) from <code className="font-mono">.env.example</code>, add{" "}
+          <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+          <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, then restart{" "}
+          <code className="font-mono">npm run dev</code>. You can still type here; sign-in
+          will work after env is set.
         </p>
       ) : null}
 
@@ -60,7 +63,7 @@ export function LoginForm({ configured, nextPath = "/dashboard" }: LoginFormProp
         </p>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={!configured || pending}>
+      <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
 
