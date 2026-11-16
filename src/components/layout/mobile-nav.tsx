@@ -41,6 +41,7 @@ export function MobileNav() {
             <Button
               variant="outline"
               className="w-full"
+              nativeButton={false}
               render={<Link href="/login" onClick={() => setOpen(false)} />}
             >
               Sign in

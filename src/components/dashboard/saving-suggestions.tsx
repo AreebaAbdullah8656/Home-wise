@@ -29,7 +29,11 @@ export function SavingSuggestions() {
             </li>
           ))}
         </ul>
-        <Button variant="outline" render={<Link href="/tips" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/tips" />}
+        >
           Browse all tips
         </Button>
       </CardContent>

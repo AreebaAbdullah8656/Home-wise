@@ -20,7 +20,11 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Your household control panel — informative, not overcrowded. Sample figures are labeled until your real budget connects."
         actions={
-          <Button variant="outline" render={<Link href="/budget" />}>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/budget" />}
+          >
             Update monthly budget
           </Button>
         }

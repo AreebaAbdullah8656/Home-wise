@@ -40,6 +40,7 @@ export function QuickActions() {
               key={action.label}
               variant="secondary"
               className="gap-2"
+              nativeButton={false}
               render={<Link href={action.href} />}
             >
               <Icon className="size-4" aria-hidden />

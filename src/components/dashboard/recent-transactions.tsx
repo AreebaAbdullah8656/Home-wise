@@ -25,7 +25,9 @@ export function RecentTransactions() {
           title="No expenses yet"
           description="When you add expenses (manually or after confirming a scanned bill), they will show up here. Nothing is invented for you."
         >
-          <Button render={<Link href="/expenses" />}>Go to Expenses</Button>
+          <Button nativeButton={false} render={<Link href="/expenses" />}>
+            Go to Expenses
+          </Button>
         </EmptyState>
       </CardContent>
     </Card>

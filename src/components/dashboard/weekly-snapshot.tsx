@@ -33,7 +33,11 @@ export function WeeklySnapshot() {
           </p>
           <p className="mt-2 text-sm text-muted-foreground">{data.note}</p>
         </div>
-        <Button variant="outline" render={<Link href="/reports" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/reports" />}
+        >
           Open Reports when you are ready
         </Button>
       </CardContent>

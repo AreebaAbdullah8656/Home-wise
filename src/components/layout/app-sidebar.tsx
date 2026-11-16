@@ -17,6 +17,7 @@ export function AppSidebar() {
         <Button
           variant="outline"
           className="w-full justify-center"
+          nativeButton={false}
           render={<Link href="/login" />}
         >
           Sign in
