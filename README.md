@@ -14,7 +14,7 @@ HomeWise helps households manage budgets, track expenses, organize groceries, st
 - **Grocery List** — priorities, mark purchased → expense once
 - **Home Inventory** — stock status, low-stock reminders, add to grocery without duplicates
 - **Smart Saving Tips** — categorized advice with bookmarks
-- **Smart Recommendations** — sample affordable alternatives & discovery (no cart/checkout); optional bill-based suggestions
+- **Smart Recommendations** — live nearby stores via Google Places (no sample/fake data; no cart/checkout); optional bill-based live place matches
 - **Reports** — weekly/monthly charts only when you open Reports
 - **Settings** — profile, currency (PKR default, changeable), optional location
 
@@ -53,6 +53,7 @@ See `.env.example`. Never commit `.env.local` or real secrets.
 | `GEMINI_API_KEY` | No | Server-only; without it, manual expenses still work |
 | `GEMINI_MODELS` | No | Ordered fallback models (default `gemini-3.8-flash,gemini-3.1-flash-lite`) |
 | `GEMINI_MODEL` | No | Legacy single-model override |
+| `GOOGLE_MAPS_API_KEY` or `GOOGLE_PLACES_API_KEY` | No (required for live Recommendations) | Server-only; enable Places API (New) + Geocoding |
 
 ## Database setup
 

@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
-import { getProductByKey } from "@/lib/recommendations/catalog";
 import type { Json } from "@/types/database";
-import type { RecommendationPayload } from "@/lib/recommendations/queries";
+import type { PlaceRecommendationPayload } from "@/lib/recommendations/queries";
+import type { LivePlace } from "@/lib/places/types";
 
 export type ActionState = {
   error?: string;
@@ -24,37 +24,46 @@ async function requireUser() {
   return { user } as const;
 }
 
-function buildPayload(formData: FormData): RecommendationPayload | null {
-  const key = String(formData.get("product_key") ?? "").trim();
-  if (!getProductByKey(key)) return null;
-  const kindRaw = String(formData.get("kind") ?? "discovery");
-  const kind: RecommendationPayload["kind"] =
-    kindRaw === "bill_alternative" ? "bill_alternative" : "discovery";
-  const billItemId = String(formData.get("bill_item_id") ?? "").trim();
-  const billItemName = String(formData.get("bill_item_name") ?? "").trim();
-  return {
-    key,
-    kind,
-    ...(billItemId ? { billItemId } : {}),
-    ...(billItemName ? { billItemName } : {}),
-  };
+function parsePlace(formData: FormData): PlaceRecommendationPayload | null {
+  const raw = String(formData.get("place_json") ?? "").trim();
+  if (!raw) return null;
+  try {
+    const place = JSON.parse(raw) as LivePlace;
+    if (!place?.placeId || !place?.name || place.source !== "Google Places") {
+      return null;
+    }
+    const kindRaw = String(formData.get("kind") ?? "live_place");
+    const kind: PlaceRecommendationPayload["kind"] =
+      kindRaw === "bill_place_match" ? "bill_place_match" : "live_place";
+    const billItemId = String(formData.get("bill_item_id") ?? "").trim();
+    const billItemName = String(formData.get("bill_item_name") ?? "").trim();
+    return {
+      key: `place:${place.placeId}`,
+      kind,
+      placeId: place.placeId,
+      place,
+      ...(billItemId ? { billItemId } : {}),
+      ...(billItemName ? { billItemName } : {}),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function upsertRecommendation(
   userId: string,
   title: string,
-  payload: RecommendationPayload,
+  payload: PlaceRecommendationPayload,
   dismissed: boolean
 ) {
   const supabase = await createClient();
   const { data: existing } = await supabase
     .from("saved_recommendations")
     .select("id, payload")
-    .eq("user_id", userId)
-    .eq("is_sample", true);
+    .eq("user_id", userId);
 
   const match = (existing ?? []).find((row) => {
-    const p = row.payload as RecommendationPayload | null;
+    const p = row.payload as PlaceRecommendationPayload | null;
     return p && typeof p === "object" && p.key === payload.key;
   });
 
@@ -65,7 +74,7 @@ async function upsertRecommendation(
         title,
         payload: payload as unknown as Json,
         dismissed,
-        is_sample: true,
+        is_sample: false,
       })
       .eq("id", match.id)
       .eq("user_id", userId);
@@ -77,7 +86,7 @@ async function upsertRecommendation(
     user_id: userId,
     title,
     payload: payload as unknown as Json,
-    is_sample: true,
+    is_sample: false,
     dismissed,
   });
   if (error) throw error;
@@ -90,14 +99,13 @@ export async function saveRecommendation(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const payload = buildPayload(formData);
-  if (!payload) return { error: "Unknown sample product." };
-  const product = getProductByKey(payload.key)!;
+  const payload = parsePlace(formData);
+  if (!payload) return { error: "Invalid live place payload." };
 
   try {
     await upsertRecommendation(
       auth.user.id,
-      product.name,
+      payload.place.name,
       payload,
       false
     );
@@ -108,7 +116,7 @@ export async function saveRecommendation(
 
   revalidatePath("/recommendations");
   revalidatePath("/bills");
-  return { success: "Saved to your recommendations." };
+  return { success: "Saved live place recommendation." };
 }
 
 export async function dismissRecommendation(
@@ -118,14 +126,13 @@ export async function dismissRecommendation(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const payload = buildPayload(formData);
-  if (!payload) return { error: "Unknown sample product." };
-  const product = getProductByKey(payload.key)!;
+  const payload = parsePlace(formData);
+  if (!payload) return { error: "Invalid live place payload." };
 
   try {
     await upsertRecommendation(
       auth.user.id,
-      product.name,
+      payload.place.name,
       payload,
       true
     );

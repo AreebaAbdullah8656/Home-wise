@@ -16,7 +16,9 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSessionUser } from "@/lib/supabase/server";
 import { getBills } from "@/lib/finance/bills";
+import { isGooglePlacesConfigured } from "@/lib/places/config";
 import {
+  getBillPlaceMatches,
   getDismissedRecommendationKeys,
   getSavedRecommendationKeys,
 } from "@/lib/recommendations/queries";
@@ -56,11 +58,14 @@ async function BillsContent() {
     );
   }
 
-  const [bills, savedRecKeys, dismissedRecKeys] = await Promise.all([
-    getBills(),
-    getSavedRecommendationKeys(),
-    getDismissedRecommendationKeys(),
-  ]);
+  const placesConfigured = isGooglePlacesConfigured();
+  const [bills, savedRecKeys, dismissedRecKeys, billMatches] =
+    await Promise.all([
+      getBills(),
+      getSavedRecommendationKeys(),
+      getDismissedRecommendationKeys(),
+      placesConfigured ? getBillPlaceMatches() : Promise.resolve([]),
+    ]);
 
   return (
     <Card className="shadow-sm">
@@ -69,8 +74,8 @@ async function BillsContent() {
           <CardTitle className="font-heading text-xl">Confirmed bills</CardTitle>
           <CardDescription>
             Search, open originals, download, or delete. Only your bills via
-            RLS + private storage. Optional sample alternatives appear when you
-            open a bill — never auto-applied.
+            RLS + private storage. Optional live store matches appear when you
+            open a bill — never auto-applied, never sample data.
           </CardDescription>
         </div>
         <Button nativeButton={false} render={<Link href="/scan-bill" />}>
@@ -83,6 +88,8 @@ async function BillsContent() {
           signedIn
           savedRecKeys={[...savedRecKeys]}
           dismissedRecKeys={[...dismissedRecKeys]}
+          billMatches={billMatches}
+          placesConfigured={placesConfigured}
         />
       </CardContent>
     </Card>

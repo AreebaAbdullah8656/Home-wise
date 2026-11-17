@@ -2,83 +2,104 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ProductCard } from "@/components/recommendations/product-card";
+import { PlaceCard } from "@/components/recommendations/place-card";
 import { Button } from "@/components/ui/button";
-import { SampleBadge } from "@/components/shared/sample-badge";
-import { matchBillAlternatives } from "@/lib/recommendations/match";
-import type { BillItemRow } from "@/lib/finance/bills";
+import type { BillPlaceMatch } from "@/lib/recommendations/queries";
 
 type BillItemSuggestionsProps = {
-  items: BillItemRow[];
+  matches: BillPlaceMatch[];
   signedIn: boolean;
   savedKeys?: string[];
   dismissedKeys?: string[];
+  placesConfigured: boolean;
 };
 
 /**
- * Optional, user-controlled sample alternatives for a confirmed bill’s items.
- * Hidden until the user expands — never auto-interrupts.
+ * Optional live Places matches for confirmed bill items.
+ * Collapsed until the user expands — never invents prices.
  */
 export function BillItemSuggestions({
-  items,
+  matches,
   signedIn,
   savedKeys = [],
   dismissedKeys = [],
+  placesConfigured,
 }: BillItemSuggestionsProps) {
   const [open, setOpen] = useState(false);
   const savedSet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
 
-  const suggestions = useMemo(
+  const visible = useMemo(
     () =>
-      matchBillAlternatives(items, { limitPerItem: 1, maxSuggestions: 6 }).filter(
-        (s) => !dismissedSet.has(s.product.key)
-      ),
-    [items, dismissedSet]
+      matches
+        .map((m) => ({
+          ...m,
+          places: m.places.filter(
+            (p) => !dismissedSet.has(`place:${p.placeId}`)
+          ),
+        }))
+        .filter((m) => m.places.length > 0 || m.error),
+    [matches, dismissedSet]
   );
 
-  if (suggestions.length === 0) return null;
+  const placeCount = visible.reduce((n, m) => n + m.places.length, 0);
+
+  if (!placesConfigured) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+        Live store suggestions need GOOGLE_MAPS_API_KEY. No sample alternatives
+        are shown.
+      </div>
+    );
+  }
+
+  if (visible.length === 0) return null;
 
   return (
     <div className="space-y-3 rounded-xl border border-dashed border-border bg-muted/30 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <SampleBadge />
-          <p className="text-sm font-medium text-foreground">
-            Optional sample alternatives
-          </p>
-        </div>
+        <p className="text-sm font-medium text-foreground">
+          Optional live store matches
+        </p>
         <Button
           type="button"
           size="sm"
           variant="outline"
           onClick={() => setOpen((v) => !v)}
         >
-          {open ? "Hide suggestions" : `Show suggestions (${suggestions.length})`}
+          {open
+            ? "Hide suggestions"
+            : `Show suggestions (${placeCount || visible.length})`}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Matched from confirmed line items. Sample prices only — ignore or dismiss
-        anytime. Full discovery lives under Smart Recommendations.
+        Google Places text search for confirmed line items near your location.
+        No invented product prices. Expand only if you want to see them.
       </p>
       {open ? (
-        <ul className="grid gap-3">
-          {suggestions.map((s) => (
-            <ProductCard
-              key={`${s.billItemId}-${s.product.key}`}
-              product={s.product}
-              signedIn={signedIn}
-              saved={savedSet.has(s.product.key)}
-              kind="bill_alternative"
-              billItemId={s.billItemId}
-              billItemName={s.billItemName}
-              billItemPrice={s.billItemPrice}
-              sampleEstimatedSavingsPkr={s.sampleEstimatedSavingsPkr}
-              reason={s.reason}
-              showMoreLink={false}
-            />
+        <div className="space-y-4">
+          {visible.map((match) => (
+            <div key={match.billItemId} className="space-y-2">
+              <p className="text-sm font-medium">{match.billItemName}</p>
+              {match.error ? (
+                <p className="text-sm text-destructive">{match.error}</p>
+              ) : null}
+              <ul className="grid gap-3">
+                {match.places.map((place) => (
+                  <PlaceCard
+                    key={`${match.billItemId}-${place.placeId}`}
+                    place={place}
+                    signedIn={signedIn}
+                    saved={savedSet.has(`place:${place.placeId}`)}
+                    kind="bill_place_match"
+                    billItemId={match.billItemId}
+                    billItemName={match.billItemName}
+                  />
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       ) : null}
       <Button
         size="sm"

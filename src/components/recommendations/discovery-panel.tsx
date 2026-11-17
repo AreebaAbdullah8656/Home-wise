@@ -1,69 +1,120 @@
 "use client";
 
-import { useMemo, useState, useActionState } from "react";
+import { useCallback, useEffect, useMemo, useState, useActionState } from "react";
 import {
   removeSavedRecommendation,
   type ActionState,
 } from "@/app/recommendations/actions";
-import { ProductCard } from "@/components/recommendations/product-card";
-import { SampleBadge } from "@/components/shared/sample-badge";
+import { PlaceCard } from "@/components/recommendations/place-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-  PRODUCT_CATEGORIES,
-  SAMPLE_SHOPS,
-  productsForSection,
-  searchProducts,
-  type ProductCategory,
-  type SampleProduct,
-} from "@/lib/recommendations/catalog";
-import type { BillAlternativeSuggestion } from "@/lib/recommendations/match";
-import type { SavedRecommendationRow } from "@/lib/recommendations/queries";
-import { getProductByKey } from "@/lib/recommendations/catalog";
+import type { LivePlace, LivePlacesResponse } from "@/lib/places/types";
+import type {
+  BillPlaceMatch,
+  PlaceRecommendationPayload,
+  SavedRecommendationRow,
+} from "@/lib/recommendations/queries";
+import { partitionLivePlaces } from "@/lib/places/partition";
 
 const initial: ActionState = {};
 
 type SectionId =
-  | "recommended"
-  | "deals"
-  | "alternatives"
-  | "essentials"
   | "nearby"
+  | "best"
+  | "free"
+  | "online"
+  | "price"
   | "from-bills"
   | "saved";
 
 const SECTIONS: { id: SectionId; label: string }[] = [
-  { id: "recommended", label: "Recommended for Your Home" },
-  { id: "deals", label: "Deals of the Week" },
-  { id: "alternatives", label: "Better Alternatives" },
-  { id: "essentials", label: "Affordable Home Essentials" },
-  { id: "nearby", label: "Nearby Shops" },
+  { id: "nearby", label: "Nearby Stores" },
+  { id: "best", label: "Best Local Options" },
+  { id: "free", label: "Free Home Delivery" },
+  { id: "online", label: "Verified Online Stores" },
+  { id: "price", label: "Lowest Available Price" },
   { id: "from-bills", label: "From your bills" },
   { id: "saved", label: "Saved" },
 ];
 
+type LiveApiOk = {
+  ok: true;
+  places: LivePlace[];
+  lastVerifiedAt: string;
+  cached: boolean;
+  cacheExpiresAt: string | null;
+  locationSource: "device" | "profile" | "query";
+  locationLabel: string | null;
+  sections: {
+    nearbyStores: LivePlace[];
+    bestLocalOptions: LivePlace[];
+    freeHomeDelivery: LivePlace[];
+    verifiedOnlineStores: LivePlace[];
+    lowestAvailablePrice: LivePlace[];
+  };
+};
+
+type LiveApiErr = {
+  ok: false;
+  code?: string;
+  message: string;
+  lastVerifiedAt?: string;
+};
+
 type DiscoveryPanelProps = {
+  placesConfigured: boolean;
+  missingKeyMessage: string;
   signedIn: boolean;
-  location: string | null;
+  profileLocation: string | null;
+  initialLive: LivePlacesResponse;
   saved: SavedRecommendationRow[];
   savedKeys: string[];
   dismissedKeys: string[];
-  billSuggestions: BillAlternativeSuggestion[];
+  billMatches: BillPlaceMatch[];
 };
 
 export function DiscoveryPanel({
+  placesConfigured,
+  missingKeyMessage,
   signedIn,
-  location,
+  profileLocation,
+  initialLive,
   saved,
   savedKeys,
   dismissedKeys,
-  billSuggestions,
+  billMatches,
 }: DiscoveryPanelProps) {
-  const [section, setSection] = useState<SectionId>("recommended");
+  const [section, setSection] = useState<SectionId>("nearby");
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<ProductCategory | "all">("all");
+  const [live, setLive] = useState<LiveApiOk | LiveApiErr | null>(
+    initialLive.ok
+      ? {
+          ok: true,
+          places: initialLive.places,
+          lastVerifiedAt: initialLive.lastVerifiedAt,
+          cached: initialLive.cached,
+          cacheExpiresAt: initialLive.cacheExpiresAt,
+          locationSource: initialLive.locationSource,
+          locationLabel: initialLive.locationLabel,
+          sections: (() => {
+            const p = partitionLivePlaces(initialLive.places);
+            return {
+              nearbyStores: p.nearby,
+              bestLocalOptions: p.bestLocal,
+              freeHomeDelivery: p.freeDelivery,
+              verifiedOnlineStores: p.verifiedOnline,
+              lowestAvailablePrice: p.lowestVerifiedPrice,
+            };
+          })(),
+        }
+      : initialLive
+  );
+  const [loading, setLoading] = useState(false);
+  const [geoNote, setGeoNote] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
   const [removeState, removeAction, removePending] = useActionState(
     removeSavedRecommendation,
     initial
@@ -72,62 +123,204 @@ export function DiscoveryPanel({
   const savedSet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
 
-  const filteredBillSuggestions = useMemo(
-    () =>
-      billSuggestions.filter((s) => !dismissedSet.has(s.product.key)),
-    [billSuggestions, dismissedSet]
+  const filterDismissed = useCallback(
+    (list: LivePlace[]) => list.filter((p) => !dismissedSet.has(`place:${p.placeId}`)),
+    [dismissedSet]
   );
 
-  const catalogProducts: SampleProduct[] = useMemo(() => {
-    let list =
-      section === "from-bills" || section === "saved" || section === "nearby"
-        ? []
-        : productsForSection(section);
-    if (query.trim()) {
-      list = searchProducts(query).filter((p) =>
-        section === "recommended" ||
-        section === "deals" ||
-        section === "alternatives" ||
-        section === "essentials"
-          ? p.sections.includes(section)
-          : true
-      );
-      if (
-        section !== "recommended" &&
-        section !== "deals" &&
-        section !== "alternatives" &&
-        section !== "essentials"
-      ) {
-        list = searchProducts(query);
+  const loadLive = useCallback(
+    async (opts: {
+      lat?: number;
+      lng?: number;
+      q?: string;
+      refresh?: boolean;
+    }) => {
+      if (!placesConfigured) return;
+      setLoading(true);
+      setGeoNote(null);
+      try {
+        const params = new URLSearchParams();
+        if (opts.lat != null && opts.lng != null) {
+          params.set("lat", String(opts.lat));
+          params.set("lng", String(opts.lng));
+        }
+        if (opts.q?.trim()) params.set("q", opts.q.trim());
+        if (opts.refresh) params.set("refresh", "1");
+        const res = await fetch(`/api/recommendations/live?${params}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as LiveApiOk | LiveApiErr;
+        setLive(data);
+      } catch (error) {
+        setLive({
+          ok: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to refresh live recommendations.",
+          lastVerifiedAt: new Date().toISOString(),
+        });
+      } finally {
+        setLoading(false);
       }
-    }
-    if (category !== "all") {
-      list = list.filter((p) => p.category === category);
-    }
-    return list.filter((p) => !dismissedSet.has(p.key));
-  }, [section, query, category, dismissedSet]);
+    },
+    [placesConfigured]
+  );
 
-  const searchAll = useMemo(() => {
-    if (!query.trim()) return null;
-    return searchProducts(query).filter(
-      (p) =>
-        !dismissedSet.has(p.key) &&
-        (category === "all" || p.category === category)
+  // Auto-refresh on mount/revisit; prefer device location when allowed.
+  useEffect(() => {
+    if (!placesConfigured) return;
+    let cancelled = false;
+    if (!navigator.geolocation) {
+      setGeoNote(
+        profileLocation
+          ? "Device geolocation unavailable — using Settings location."
+          : "Device geolocation unavailable and no Settings location set."
+      );
+      void loadLive({ refresh: true });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled) return;
+        const next = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
+        setCoords(next);
+        setGeoNote("Using live device location.");
+        void loadLive({ ...next, refresh: true });
+      },
+      () => {
+        if (cancelled) return;
+        setGeoNote(
+          profileLocation
+            ? "Location permission declined — using Settings location."
+            : "Location permission declined and no Settings location set."
+        );
+        void loadLive({ refresh: true });
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }
     );
-  }, [query, dismissedSet, category]);
+    return () => {
+      cancelled = true;
+    };
+  }, [placesConfigured, profileLocation, loadLive]);
+
+  const sections = live && live.ok ? live.sections : null;
+  const listForSection = useMemo(() => {
+    if (!sections) return [] as LivePlace[];
+    switch (section) {
+      case "nearby":
+        return filterDismissed(sections.nearbyStores);
+      case "best":
+        return filterDismissed(sections.bestLocalOptions);
+      case "free":
+        return filterDismissed(sections.freeHomeDelivery);
+      case "online":
+        return filterDismissed(sections.verifiedOnlineStores);
+      case "price":
+        return filterDismissed(sections.lowestAvailablePrice);
+      default:
+        return [];
+    }
+  }, [section, sections, filterDismissed]);
+
+  const filteredBillMatches = useMemo(
+    () =>
+      billMatches.map((m) => ({
+        ...m,
+        places: m.places.filter(
+          (p) => !dismissedSet.has(`place:${p.placeId}`)
+        ),
+      })),
+    [billMatches, dismissedSet]
+  );
+
+  if (!placesConfigured) {
+    return (
+      <div className="space-y-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
+        <p className="font-heading text-lg text-foreground">
+          Live recommendations unavailable
+        </p>
+        <p className="mx-auto max-w-xl text-sm text-muted-foreground">
+          {missingKeyMessage}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          No sample or placeholder stores are shown.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm text-accent-foreground">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <SampleBadge />
-          <span className="font-medium">Personal recommendation assistant</span>
-        </div>
-        <p>
-          All prices, shops, and links below are <strong>sample data</strong> for
-          discovery — not live discounts or inventory. HomeWise has no cart,
-          checkout, or payments.
+        <p className="font-medium">Live Google Places data only</p>
+        <p className="mt-1">
+          External redirect assistant — no cart, checkout, or payments. Product
+          prices and free delivery appear only when verified; otherwise we show
+          an honest empty or unavailable state.
         </p>
+        <p className="mt-2 text-xs">
+          {geoNote || "Resolving location…"}
+          {profileLocation ? ` · Settings location: ${profileLocation}` : ""}
+          {live && live.ok
+            ? ` · Last verified ${new Date(live.lastVerifiedAt).toLocaleString()}${
+                live.cached ? " (short cache)" : ""
+              }`
+            : ""}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={loading}
+          onClick={() =>
+            void loadLive({
+              ...(coords ?? {}),
+              refresh: true,
+              q: query || undefined,
+            })
+          }
+        >
+          {loading ? "Refreshing…" : "Refresh now"}
+        </Button>
+        {coords ? (
+          <span className="self-center text-xs text-muted-foreground">
+            Device coords locked for this session
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_auto]">
+        <div className="space-y-1">
+          <Label htmlFor="live_search">Search live places near you</Label>
+          <Input
+            id="live_search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Pharmacy, supermarket, detergent store…"
+          />
+        </div>
+        <div className="flex items-end">
+          <Button
+            type="button"
+            disabled={loading || !query.trim()}
+            onClick={() =>
+              void loadLive({
+                ...(coords ?? {}),
+                q: query,
+                refresh: true,
+              })
+            }
+          >
+            Search
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -140,178 +333,102 @@ export function DiscoveryPanel({
             onClick={() => setSection(s.id)}
           >
             {s.label}
-            {s.id === "from-bills" ? ` (${filteredBillSuggestions.length})` : ""}
             {s.id === "saved" ? ` (${saved.length})` : ""}
+            {s.id === "from-bills"
+              ? ` (${filteredBillMatches.reduce((n, m) => n + m.places.length, 0)})`
+              : ""}
           </Button>
         ))}
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="rec_search">Search sample products</Label>
-          <Input
-            id="rec_search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Detergent, kettle, oil…"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="rec_category">Category</Label>
-          <select
-            id="rec_category"
-            value={category}
-            onChange={(e) =>
-              setCategory(e.target.value as ProductCategory | "all")
-            }
-            className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="all">All categories</option>
-            {PRODUCT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {searchAll && query.trim() && section !== "nearby" && section !== "saved" ? (
-        <div className="space-y-3">
-          <h2 className="font-heading text-xl text-foreground">
-            Search results
-          </h2>
-          {searchAll.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No sample products match that search.
-            </p>
-          ) : (
-            <ul className="grid gap-3 lg:grid-cols-2">
-              {searchAll.map((product) => (
-                <ProductCard
-                  key={`search-${product.key}`}
-                  product={product}
-                  signedIn={signedIn}
-                  saved={savedSet.has(product.key)}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
-
-      {section === "nearby" ? (
-        <div className="space-y-3">
-          <h2 className="font-heading text-xl text-foreground">Nearby Shops</h2>
-          <p className="text-sm text-muted-foreground">
-            {location
-              ? `Using your Settings location: ${location}. Shop rows below are still sample listings.`
-              : "Add an optional location in Settings to personalize this label. Shop rows are sample data only — no live map API yet."}
-          </p>
-          <ul className="grid gap-3 md:grid-cols-2">
-            {SAMPLE_SHOPS.map((shop) => (
-              <li
-                key={shop.key}
-                className="space-y-2 rounded-xl border border-border bg-card p-4"
-              >
-                <div className="flex flex-wrap gap-2">
-                  <SampleBadge />
-                  <Badge variant="outline">{shop.focus}</Badge>
-                </div>
-                <h3 className="font-heading text-lg">{shop.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {shop.area} · {location || shop.cityHint}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={shop.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    />
-                  }
-                >
-                  Open sample shop link
-                </Button>
-              </li>
-            ))}
-          </ul>
+      {live && !live.ok ? (
+        <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">No live results</p>
+          <p className="mt-2">{live.message}</p>
+          <p className="mt-2">Sample data is never shown as a fallback.</p>
         </div>
       ) : null}
 
       {section === "from-bills" ? (
-        <div className="space-y-3">
-          <h2 className="font-heading text-xl text-foreground">
-            From your confirmed bills
-          </h2>
+        <div className="space-y-4">
+          <h2 className="font-heading text-xl">From your bills</h2>
           <p className="text-sm text-muted-foreground">
-            Optional suggestions matched to confirmed bill lines. Dismiss any you
-            do not want. Sample alternatives only — never auto-applied.
+            Live Places text search for confirmed bill item names near your
+            location. No invented product prices.
           </p>
-          {filteredBillSuggestions.length === 0 ? (
+          {filteredBillMatches.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              No matches yet. Confirm a bill with items like detergent, shampoo,
-              or kitchen goods, or browse other sections.
+              No live bill matches yet. Confirm bills with item names and set a
+              location (device or Settings).
             </p>
           ) : (
-            <ul className="grid gap-3 lg:grid-cols-2">
-              {filteredBillSuggestions.map((s) => (
-                <ProductCard
-                  key={`${s.billItemId}-${s.product.key}`}
-                  product={s.product}
-                  signedIn={signedIn}
-                  saved={savedSet.has(s.product.key)}
-                  kind="bill_alternative"
-                  billItemId={s.billItemId}
-                  billItemName={s.billItemName}
-                  billItemPrice={s.billItemPrice}
-                  sampleEstimatedSavingsPkr={s.sampleEstimatedSavingsPkr}
-                  reason={s.reason}
-                />
-              ))}
-            </ul>
+            filteredBillMatches.map((match) => (
+              <div key={match.billItemId} className="space-y-2">
+                <h3 className="font-medium text-foreground">
+                  {match.billItemName}
+                </h3>
+                {match.error ? (
+                  <p className="text-sm text-destructive">{match.error}</p>
+                ) : null}
+                {match.places.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No live places found for this item.
+                  </p>
+                ) : (
+                  <ul className="grid gap-3 lg:grid-cols-2">
+                    {match.places.map((place) => (
+                      <PlaceCard
+                        key={`${match.billItemId}-${place.placeId}`}
+                        place={place}
+                        signedIn={signedIn}
+                        saved={savedSet.has(`place:${place.placeId}`)}
+                        kind="bill_place_match"
+                        billItemId={match.billItemId}
+                        billItemName={match.billItemName}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))
           )}
         </div>
       ) : null}
 
       {section === "saved" ? (
         <div className="space-y-3">
-          <h2 className="font-heading text-xl text-foreground">Saved</h2>
+          <h2 className="font-heading text-xl">Saved</h2>
           {removeState.error ? (
             <p className="text-sm text-destructive" role="alert">
               {removeState.error}
             </p>
           ) : null}
-          {removeState.success ? (
-            <p className="text-sm" role="status">
-              {removeState.success}
-            </p>
-          ) : null}
           {saved.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              Nothing saved yet. Save a sample recommendation from any section.
+              Nothing saved yet.
             </p>
           ) : (
             <ul className="grid gap-3 lg:grid-cols-2">
               {saved.map((row) => {
-                const key =
-                  row.payload &&
-                  typeof row.payload === "object" &&
-                  !Array.isArray(row.payload) &&
-                  typeof (row.payload as { key?: unknown }).key === "string"
-                    ? (row.payload as { key: string }).key
+                const payload = row.payload as PlaceRecommendationPayload | null;
+                const place =
+                  payload &&
+                  typeof payload === "object" &&
+                  payload.place &&
+                  payload.place.source === "Google Places"
+                    ? payload.place
                     : null;
-                const product = key ? getProductByKey(key) : undefined;
-                if (!product) {
+                if (!place) {
                   return (
                     <li
                       key={row.id}
                       className="rounded-xl border border-border p-4 text-sm"
                     >
                       <p className="font-medium">{row.title}</p>
+                      <p className="text-muted-foreground">
+                        Saved entry is not a live Google Places record (removed
+                        sample payloads are not re-displayed as stores).
+                      </p>
                       <form action={removeAction} className="mt-2">
                         <input type="hidden" name="id" value={row.id} />
                         <Button
@@ -328,12 +445,7 @@ export function DiscoveryPanel({
                 }
                 return (
                   <li key={row.id} className="space-y-2">
-                    <ProductCard
-                      product={product}
-                      signedIn={signedIn}
-                      saved
-                      showMoreLink={false}
-                    />
+                    <PlaceCard place={place} signedIn={signedIn} saved />
                     <form action={removeAction}>
                       <input type="hidden" name="id" value={row.id} />
                       <Button
@@ -353,29 +465,46 @@ export function DiscoveryPanel({
         </div>
       ) : null}
 
-      {section !== "nearby" &&
-      section !== "from-bills" &&
-      section !== "saved" &&
-      !(query.trim() && searchAll) ? (
+      {section !== "from-bills" && section !== "saved" && live?.ok ? (
         <div className="space-y-3">
-          <h2 className="font-heading text-xl text-foreground">
+          <h2 className="font-heading text-xl">
             {SECTIONS.find((s) => s.id === section)?.label}
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Demo offers are labeled sample — not real discounts.
-          </p>
-          {catalogProducts.length === 0 ? (
+          {section === "free" ? (
             <p className="text-sm text-muted-foreground">
-              No sample products in this view.
+              Free home delivery is listed only when explicitly confirmed.
+              Google Places can report that delivery exists, but not that it is
+              free — those places appear under Nearby / Best Local with
+              “cost not verified free,” not here.
+            </p>
+          ) : null}
+          {section === "price" ? (
+            <p className="text-sm text-muted-foreground">
+              Google Places does not provide verified product unit prices.
+              HomeWise will not invent prices. This section stays empty until a
+              verified price source is connected.
+            </p>
+          ) : null}
+          {listForSection.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              {section === "free"
+                ? "No free home delivery offers could be verified. Delivery information unavailable for free-delivery claims."
+                : section === "price"
+                  ? "No verified product prices available."
+                  : section === "online"
+                    ? "No nearby places with a verified website from Google Places."
+                    : section === "best"
+                      ? "No rated local places in the live result set."
+                      : "No nearby stores found for this location."}
             </p>
           ) : (
             <ul className="grid gap-3 lg:grid-cols-2">
-              {catalogProducts.map((product) => (
-                <ProductCard
-                  key={product.key}
-                  product={product}
+              {listForSection.map((place) => (
+                <PlaceCard
+                  key={place.placeId}
+                  place={place}
                   signedIn={signedIn}
-                  saved={savedSet.has(product.key)}
+                  saved={savedSet.has(`place:${place.placeId}`)}
                 />
               ))}
             </ul>

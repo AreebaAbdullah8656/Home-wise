@@ -21,6 +21,7 @@ import { formatPkr } from "@/lib/format";
 import { toNumber } from "@/lib/budget-math";
 import type { BillWithItems } from "@/lib/finance/bills";
 import { BillItemSuggestions } from "@/components/recommendations/bill-item-suggestions";
+import type { BillPlaceMatch } from "@/lib/recommendations/queries";
 
 const initial: ActionState = {};
 
@@ -29,6 +30,8 @@ type BillsListProps = {
   signedIn?: boolean;
   savedRecKeys?: string[];
   dismissedRecKeys?: string[];
+  billMatches?: BillPlaceMatch[];
+  placesConfigured?: boolean;
 };
 
 export function BillsList({
@@ -36,6 +39,8 @@ export function BillsList({
   signedIn = false,
   savedRecKeys = [],
   dismissedRecKeys = [],
+  billMatches = [],
+  placesConfigured = false,
 }: BillsListProps) {
   const [search, setSearch] = useState("");
   const [store, setStore] = useState("");
@@ -283,10 +288,13 @@ export function BillsList({
                 ))}
               </ul>
               <BillItemSuggestions
-                items={viewing.bill_items ?? []}
+                matches={billMatches.filter((m) =>
+                  (viewing.bill_items ?? []).some((item) => item.id === m.billItemId)
+                )}
                 signedIn={signedIn}
                 savedKeys={savedRecKeys}
                 dismissedKeys={dismissedRecKeys}
+                placesConfigured={placesConfigured}
               />
             </div>
           ) : null}

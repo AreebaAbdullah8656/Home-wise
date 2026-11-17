@@ -4,14 +4,21 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { Database, Json } from "@/types/database";
 import { getBills } from "@/lib/finance/bills";
-import { matchBillAlternatives } from "@/lib/recommendations/match";
+import {
+  fetchNearbyLivePlaces,
+  fetchTextSearchLivePlaces,
+} from "@/lib/places/service";
+import { isGooglePlacesConfigured, missingPlacesMessage } from "@/lib/places/config";
+import type { LivePlace, LivePlacesResponse } from "@/lib/places/types";
 
 export type SavedRecommendationRow =
   Database["public"]["Tables"]["saved_recommendations"]["Row"];
 
-export type RecommendationPayload = {
+export type PlaceRecommendationPayload = {
   key: string;
-  kind: "discovery" | "bill_alternative";
+  kind: "live_place" | "bill_place_match";
+  placeId: string;
+  place: LivePlace;
   billItemId?: string;
   billItemName?: string;
 };
@@ -27,7 +34,7 @@ function payloadKey(payload: Json): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
   }
-  const key = (payload as RecommendationPayload).key;
+  const key = (payload as { key?: unknown }).key;
   return typeof key === "string" ? key : null;
 }
 
@@ -81,13 +88,6 @@ export const getSavedRecommendationKeys = cache(async () => {
   return keys;
 });
 
-/** Optional bill-based sample suggestions from recent confirmed bills. */
-export const getBillAlternativeSuggestions = cache(async () => {
-  const bills = await getBills();
-  const items = bills.flatMap((b) => b.bill_items ?? []).slice(0, 40);
-  return matchBillAlternatives(items, { limitPerItem: 2, maxSuggestions: 10 });
-});
-
 export const getProfileLocation = cache(async () => {
   const userId = await requireUserId();
   if (!userId) return null;
@@ -100,3 +100,67 @@ export const getProfileLocation = cache(async () => {
   if (error) throw error;
   return data?.location?.trim() || null;
 });
+
+export type BillPlaceMatch = {
+  billItemId: string;
+  billItemName: string;
+  places: LivePlace[];
+  error?: string;
+};
+
+/**
+ * Live Places text search for recent confirmed bill item names.
+ * Returns real places only — never sample product prices.
+ */
+export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => {
+  if (!isGooglePlacesConfigured()) return [];
+  const location = await getProfileLocation();
+  if (!location) return [];
+
+  const bills = await getBills();
+  const items = bills
+    .flatMap((b) => b.bill_items ?? [])
+    .map((item) => ({
+      id: item.id,
+      name: (item.product_name ?? "").trim(),
+    }))
+    .filter((item) => item.name.length >= 3)
+    .slice(0, 5);
+
+  const matches: BillPlaceMatch[] = [];
+  for (const item of items) {
+    const live = await fetchTextSearchLivePlaces({
+      query: item.name,
+      address: location,
+    });
+    if (!live.ok) {
+      matches.push({
+        billItemId: item.id,
+        billItemName: item.name,
+        places: [],
+        error: live.message,
+      });
+      continue;
+    }
+    if (live.places.length === 0) continue;
+    matches.push({
+      billItemId: item.id,
+      billItemName: item.name,
+      places: live.places.slice(0, 3),
+    });
+  }
+  return matches;
+});
+
+export async function getInitialLivePlaces(): Promise<LivePlacesResponse> {
+  if (!isGooglePlacesConfigured()) {
+    return {
+      ok: false,
+      code: "missing_api_key",
+      message: missingPlacesMessage(),
+      lastVerifiedAt: new Date().toISOString(),
+    };
+  }
+  const location = await getProfileLocation();
+  return fetchNearbyLivePlaces({ address: location });
+}
