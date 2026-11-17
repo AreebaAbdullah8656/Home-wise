@@ -45,11 +45,12 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
   const [items, setItems] = useState<BillItemExtraction[]>([]);
   const [preparing, startPrepare] = useTransition();
   const [scanning, startScan] = useTransition();
+  const [confirmingTransition, startConfirm] = useTransition();
   const [confirmState, confirmAction, confirming] = useActionState(
     confirmBillScan,
     initial
   );
-  const busy = preparing || scanning || confirming;
+  const busy = preparing || scanning || confirming || confirmingTransition;
 
   function onFileChange(next: File | null) {
     setExtraction(null);
@@ -153,7 +154,10 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
     fd.set("purchase_date", purchaseDate);
     fd.set("total_amount", totalAmount);
     fd.set("notes", notes);
-    confirmAction(fd);
+    // useActionState dispatch must run inside a transition
+    startConfirm(() => {
+      confirmAction(fd);
+    });
   }
 
   return (
@@ -272,7 +276,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                   id="store_name"
                   value={storeName}
                   onChange={(e) => setStoreName(e.target.value)}
-                  disabled={confirming}
+                  disabled={busy}
                 />
               </div>
               <div className="space-y-2">
@@ -282,7 +286,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                   type="date"
                   value={purchaseDate}
                   onChange={(e) => setPurchaseDate(e.target.value)}
-                  disabled={confirming}
+                  disabled={busy}
                 />
               </div>
               <div className="space-y-2">
@@ -294,7 +298,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                   step="1"
                   value={totalAmount}
                   onChange={(e) => setTotalAmount(e.target.value)}
-                  disabled={confirming}
+                  disabled={busy}
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
@@ -304,7 +308,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  disabled={confirming}
+                  disabled={busy}
                 />
               </div>
             </div>
@@ -345,7 +349,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                     onChange={(e) =>
                       updateItem(index, { product_name: e.target.value })
                     }
-                    disabled={confirming}
+                    disabled={busy}
                   />
                   <Input
                     type="number"
@@ -358,7 +362,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                           : null,
                       })
                     }
-                    disabled={confirming}
+                    disabled={busy}
                   />
                   <Input
                     type="number"
@@ -371,7 +375,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                           : null,
                       })
                     }
-                    disabled={confirming}
+                    disabled={busy}
                   />
                   <Input
                     type="number"
@@ -384,7 +388,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                           : null,
                       })
                     }
-                    disabled={confirming}
+                    disabled={busy}
                   />
                   <div className="flex gap-2">
                     <Input
@@ -395,7 +399,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                           category_suggestion: e.target.value || null,
                         })
                       }
-                      disabled={confirming}
+                      disabled={busy}
                     />
                     <Button
                       type="button"
@@ -404,7 +408,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                       onClick={() =>
                         setItems((prev) => prev.filter((_, i) => i !== index))
                       }
-                      disabled={confirming}
+                      disabled={busy}
                     >
                       Remove
                     </Button>
@@ -436,9 +440,11 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
             <Button
               type="button"
               onClick={submitConfirm}
-              disabled={!file || confirming}
+              disabled={!file || busy}
             >
-              {confirming ? "Saving…" : "Confirm and save bill"}
+              {confirmingTransition || confirming
+                ? "Saving…"
+                : "Confirm and save bill"}
             </Button>
           </CardContent>
         </Card>

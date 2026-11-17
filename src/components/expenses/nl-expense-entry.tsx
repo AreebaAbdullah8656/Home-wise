@@ -47,10 +47,12 @@ export function NlExpenseEntry({
   const [paymentMethod, setPaymentMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [parsing, startParse] = useTransition();
+  const [confirmingTransition, startConfirm] = useTransition();
   const [confirmState, confirmAction, confirming] = useActionState(
     confirmNlExpense,
     initial
   );
+  const confirmingBusy = confirming || confirmingTransition;
 
   function matchCategory(suggestionName: string | null | undefined) {
     if (!suggestionName) return "";
@@ -113,7 +115,10 @@ export function NlExpenseEntry({
     fd.set("expense_date", expenseDate);
     fd.set("payment_method", paymentMethod);
     fd.set("notes", notes);
-    confirmAction(fd);
+    // useActionState dispatch must run inside a transition
+    startConfirm(() => {
+      confirmAction(fd);
+    });
   }
 
   return (
@@ -136,13 +141,13 @@ export function NlExpenseEntry({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder='e.g. "Bought groceries for Rs. 2500 today."'
-          disabled={!geminiReady || parsing || confirming}
+          disabled={!geminiReady || parsing || confirmingBusy}
         />
       </div>
       <Button
         type="button"
         onClick={runParse}
-        disabled={!geminiReady || parsing || confirming}
+        disabled={!geminiReady || parsing || confirmingBusy}
       >
         {parsing ? "Parsing…" : "Suggest with Gemini"}
       </Button>
@@ -158,7 +163,7 @@ export function NlExpenseEntry({
               size="sm"
               variant="outline"
               onClick={runParse}
-              disabled={parsing || confirming}
+              disabled={parsing || confirmingBusy}
             >
               Retry
             </Button>
@@ -182,7 +187,7 @@ export function NlExpenseEntry({
                 id="nl_name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
               />
             </div>
             <div className="space-y-2">
@@ -193,7 +198,7 @@ export function NlExpenseEntry({
                 min={1}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
               />
             </div>
             <div className="space-y-2">
@@ -203,7 +208,7 @@ export function NlExpenseEntry({
                 type="date"
                 value={expenseDate}
                 onChange={(e) => setExpenseDate(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
               />
             </div>
             <div className="space-y-2">
@@ -212,7 +217,7 @@ export function NlExpenseEntry({
                 id="nl_category"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
                 className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
               >
                 <option value="">Uncategorized</option>
@@ -229,7 +234,7 @@ export function NlExpenseEntry({
                 id="nl_payment"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
                 className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
               >
                 <option value="">Select</option>
@@ -247,7 +252,7 @@ export function NlExpenseEntry({
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                disabled={confirming}
+                disabled={confirmingBusy}
               />
             </div>
           </div>
@@ -272,9 +277,9 @@ export function NlExpenseEntry({
           <Button
             type="button"
             onClick={submitConfirm}
-            disabled={confirming}
+            disabled={confirmingBusy}
           >
-            {confirming ? "Saving…" : "Confirm and save expense"}
+            {confirmingBusy ? "Saving…" : "Confirm and save expense"}
           </Button>
         </div>
       ) : null}
