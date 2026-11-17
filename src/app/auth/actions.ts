@@ -140,7 +140,8 @@ export async function updateProfile(
     }
 
     const displayName = String(formData.get("display_name") ?? "").trim();
-    const currency = String(formData.get("currency") ?? "PKR").trim() || "PKR";
+    const currency =
+      String(formData.get("currency") ?? "PKR").trim().toUpperCase() || "PKR";
     const location = String(formData.get("location") ?? "").trim();
 
     const { error } = await supabase
@@ -162,5 +163,6 @@ export async function updateProfile(
   }
 
   revalidatePath("/settings");
+  revalidatePath("/dashboard");
   return { success: "Profile saved." };
 }

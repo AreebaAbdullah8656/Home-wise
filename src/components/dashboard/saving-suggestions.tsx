@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -5,19 +6,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { sampleSavingSuggestions } from "@/lib/sample-dashboard";
 
-/** Small optional dashboard tips only — no link to unfinished Tips section. */
+/** Small optional dashboard tips — full library lives on Smart Saving Tips. */
 export function SavingSuggestions() {
   return (
     <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="font-heading text-xl">Saving suggestions</CardTitle>
         <CardDescription>
-          Short optional tips on the dashboard. Full tip library comes later.
+          Short optional tips. Open the full library anytime — nothing auto-opens.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <ul className="space-y-3">
           {sampleSavingSuggestions.map((tip) => (
             <li
@@ -28,6 +30,13 @@ export function SavingSuggestions() {
             </li>
           ))}
         </ul>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/tips" />}
+        >
+          Browse all tips
+        </Button>
       </CardContent>
     </Card>
   );

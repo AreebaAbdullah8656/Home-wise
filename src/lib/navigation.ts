@@ -8,6 +8,7 @@ import {
   PiggyBank,
   ShoppingCart,
   Home,
+  Lightbulb,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -20,8 +21,7 @@ export type NavItem = {
 };
 
 /**
- * Deploy-ready sidebar — unfinished SPEC sections stay out of nav
- * (Tips, Recommendations).
+ * Deploy-ready sidebar — Smart Recommendations stays hidden until shipped.
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -73,6 +73,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Household stock and supplies",
   },
   {
+    title: "Smart Saving Tips",
+    href: "/tips",
+    icon: Lightbulb,
+    description: "Practical money-saving advice",
+  },
+  {
     title: "Reports",
     href: "/reports",
     icon: BarChart3,
@@ -86,8 +92,5 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Routes still hidden until their phases ship. Direct visits redirect home. */
-export const HIDDEN_FEATURE_ROUTES = [
-  "/tips",
-  "/recommendations",
-] as const;
+/** Routes still hidden. Direct visits redirect home. */
+export const HIDDEN_FEATURE_ROUTES = ["/recommendations"] as const;

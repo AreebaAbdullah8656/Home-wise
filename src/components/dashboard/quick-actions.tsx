@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   PiggyBank,
   Home,
+  Lightbulb,
   BarChart3,
 } from "lucide-react";
 import {
@@ -26,6 +27,7 @@ const actions = [
   { href: "/savings", label: "Savings & emergency", icon: PiggyBank },
   { href: "/grocery", label: "Add grocery item", icon: ShoppingCart },
   { href: "/inventory", label: "Home inventory", icon: Home },
+  { href: "/tips", label: "Saving tips", icon: Lightbulb },
   { href: "/reports", label: "Open reports", icon: BarChart3 },
 ] as const;
 

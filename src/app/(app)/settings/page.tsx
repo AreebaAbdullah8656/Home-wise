@@ -15,6 +15,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Settings" };
+export const instant = false;
 
 function SettingsFallback() {
   return (
@@ -34,7 +35,7 @@ async function SettingsContent() {
       <EmptyState
         icon={Settings}
         title="Connect Supabase to manage your profile"
-        description="Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local, run the Phase 3 SQL migrations, then sign in."
+        description="Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local, run the SQL migrations, then sign in."
       />
     );
   }
@@ -71,17 +72,39 @@ async function SettingsContent() {
   }
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader>
-        <CardTitle className="font-heading text-xl">User profile</CardTitle>
-        <CardDescription>
-          Email/password account only — no Google or magic link.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ProfileForm profile={profile} email={user.email ?? ""} />
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="font-heading text-xl">User profile</CardTitle>
+          <CardDescription>
+            Display name, currency (PKR by default), and optional location.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm profile={profile} email={user.email ?? ""} />
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="font-heading text-xl">Preferences</CardTitle>
+          <CardDescription>
+            Bill upload stays optional. Reports never open automatically. Smart
+            Recommendations is not enabled in this release.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Budget alerts and notification preferences can expand later without
+            changing your profile currency or location.
+          </p>
+          <p>
+            Account security: email/password only. Sign out from the sidebar
+            when you are done.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -90,7 +113,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl">
       <PageHeader
         title="Settings"
-        description="Update your profile. Currency defaults to PKR. Location stays optional."
+        description="Profile, currency (PKR default), and optional location."
       />
       <Suspense fallback={<SettingsFallback />}>
         <SettingsContent />
