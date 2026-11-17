@@ -1,4 +1,8 @@
-import { requireGemini, extractJsonText } from "@/lib/gemini/client";
+import {
+  extractJsonText,
+  generateContentResilient,
+  type GeminiGenerateResult,
+} from "@/lib/gemini/client";
 import {
   BILL_CATEGORY_HINTS,
   billExtractionSchema,
@@ -34,24 +38,38 @@ Category suggestions should be one of: ${BILL_CATEGORY_HINTS.join(", ")}.
 If a field is unclear, use null. Do not invent prices. Amounts are numbers without currency symbols.
 Never invent discounts or taxes that are not visible.`;
 
+export type BillParseResult = {
+  extraction: BillExtraction;
+  meta: Omit<GeminiGenerateResult, "text">;
+};
+
 export async function parseBillWithGemini(input: {
   bytes: Uint8Array;
   mimeType: string;
-}): Promise<BillExtraction> {
-  const model = requireGemini();
+}): Promise<BillParseResult> {
   const base64 = Buffer.from(input.bytes).toString("base64");
 
-  const result = await model.generateContent([
-    { text: BILL_PROMPT },
-    {
-      inlineData: {
-        mimeType: input.mimeType,
-        data: base64,
+  const generated = await generateContentResilient(
+    [
+      { text: BILL_PROMPT },
+      {
+        inlineData: {
+          mimeType: input.mimeType,
+          data: base64,
+        },
       },
-    },
-  ]);
+    ],
+    "bills.scan"
+  );
 
-  const text = result.response.text();
-  const parsed = JSON.parse(extractJsonText(text)) as unknown;
-  return billExtractionSchema.parse(parsed);
+  const parsed = JSON.parse(extractJsonText(generated.text)) as unknown;
+  return {
+    extraction: billExtractionSchema.parse(parsed),
+    meta: {
+      model: generated.model,
+      durationMs: generated.durationMs,
+      attempts: generated.attempts,
+      modelsTried: generated.modelsTried,
+    },
+  };
 }

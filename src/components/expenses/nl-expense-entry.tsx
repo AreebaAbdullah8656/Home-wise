@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { todayIso } from "@/lib/budget-math";
+import { parseGeminiFailure } from "@/lib/client/gemini-request";
 
 const initial: ActionState = {};
 
@@ -35,6 +36,7 @@ export function NlExpenseEntry({
 }: NlExpenseEntryProps) {
   const [text, setText] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [parseRetryable, setParseRetryable] = useState(false);
   const [suggestion, setSuggestion] = useState<NlExpenseSuggestion | null>(
     null
   );
@@ -66,9 +68,11 @@ export function NlExpenseEntry({
   function runParse() {
     if (!text.trim()) {
       setParseError("Type an expense description first.");
+      setParseRetryable(false);
       return;
     }
     setParseError(null);
+    setParseRetryable(false);
     startParse(async () => {
       const res = await fetch("/api/expenses/parse-nl", {
         method: "POST",
@@ -77,11 +81,17 @@ export function NlExpenseEntry({
       });
       const json = (await res.json()) as {
         error?: string;
+        retryable?: boolean;
         suggestion?: NlExpenseSuggestion;
       };
       if (!res.ok || !json.suggestion) {
+        const failure = parseGeminiFailure(
+          json,
+          "Could not parse that expense."
+        );
         setSuggestion(null);
-        setParseError(json.error || "Could not parse that expense.");
+        setParseError(failure.error);
+        setParseRetryable(failure.retryable || res.status === 503);
         return;
       }
       const s = json.suggestion;
@@ -137,12 +147,23 @@ export function NlExpenseEntry({
         {parsing ? "Parsing…" : "Suggest with Gemini"}
       </Button>
       {parseError ? (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        <div
+          className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
           role="alert"
         >
-          {parseError}
-        </p>
+          <p>{parseError}</p>
+          {parseRetryable ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={runParse}
+              disabled={parsing || confirming}
+            >
+              Retry
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {suggestion ? (

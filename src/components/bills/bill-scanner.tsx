@@ -19,41 +19,57 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { todayIso } from "@/lib/budget-math";
+import { compressImageForUpload } from "@/lib/client/compress-image";
+import { parseGeminiFailure } from "@/lib/client/gemini-request";
 
 const initial: ActionState = {};
 
 type ScanResponse = {
   ok?: boolean;
   error?: string;
+  retryable?: boolean;
   extraction?: BillExtraction;
+  model?: string;
 };
 
 export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanRetryable, setScanRetryable] = useState(false);
   const [extraction, setExtraction] = useState<BillExtraction | null>(null);
   const [storeName, setStoreName] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(todayIso());
   const [totalAmount, setTotalAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<BillItemExtraction[]>([]);
+  const [preparing, startPrepare] = useTransition();
   const [scanning, startScan] = useTransition();
   const [confirmState, confirmAction, confirming] = useActionState(
     confirmBillScan,
     initial
   );
+  const busy = preparing || scanning || confirming;
 
   function onFileChange(next: File | null) {
-    setFile(next);
     setExtraction(null);
     setScanError(null);
+    setScanRetryable(false);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    if (next && next.type.startsWith("image/")) {
-      setPreviewUrl(URL.createObjectURL(next));
-    } else {
+    if (!next) {
+      setFile(null);
       setPreviewUrl(null);
+      return;
     }
+    startPrepare(async () => {
+      const prepared = await compressImageForUpload(next);
+      setFile(prepared);
+      if (prepared.type.startsWith("image/")) {
+        setPreviewUrl(URL.createObjectURL(prepared));
+      } else {
+        setPreviewUrl(null);
+      }
+    });
   }
 
   function applyExtraction(data: BillExtraction) {
@@ -85,16 +101,20 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
   function runScan() {
     if (!file) {
       setScanError("Choose a bill image or PDF first.");
+      setScanRetryable(false);
       return;
     }
     setScanError(null);
+    setScanRetryable(false);
     startScan(async () => {
       const body = new FormData();
       body.set("file", file);
       const res = await fetch("/api/bills/scan", { method: "POST", body });
       const json = (await res.json()) as ScanResponse;
       if (!res.ok || !json.extraction) {
-        setScanError(json.error || "Scan failed.");
+        const failure = parseGeminiFailure(json, "Scan failed.");
+        setScanError(failure.error);
+        setScanRetryable(failure.retryable || res.status === 503);
         setExtraction(null);
         return;
       }
@@ -165,7 +185,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                 id="bill_file"
                 type="file"
                 accept="image/*,application/pdf"
-                disabled={!geminiReady || scanning || confirming}
+                disabled={!geminiReady || busy}
                 onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
               />
             </div>
@@ -176,7 +196,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                 type="file"
                 accept="image/*"
                 capture="environment"
-                disabled={!geminiReady || scanning || confirming}
+                disabled={!geminiReady || busy}
                 onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
               />
             </div>
@@ -191,15 +211,16 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
           ) : file ? (
             <p className="text-sm text-muted-foreground">
               Selected: {file.name} ({Math.round(file.size / 1024)} KB)
+              {preparing ? " · compressing…" : ""}
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               onClick={runScan}
-              disabled={!geminiReady || !file || scanning || confirming}
+              disabled={!geminiReady || !file || busy}
             >
-              {scanning ? "Scanning…" : "Scan with Gemini"}
+              {scanning ? "Scanning…" : preparing ? "Preparing…" : "Scan with Gemini"}
             </Button>
             <Button
               type="button"
@@ -211,12 +232,23 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
             </Button>
           </div>
           {scanError ? (
-            <p
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            <div
+              className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
               role="alert"
             >
-              {scanError}
-            </p>
+              <p>{scanError}</p>
+              {scanRetryable ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={runScan}
+                  disabled={!file || busy}
+                >
+                  Retry
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </CardContent>
       </Card>

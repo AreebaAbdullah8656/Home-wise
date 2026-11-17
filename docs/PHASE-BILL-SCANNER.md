@@ -43,10 +43,11 @@ Still hidden: Smart Saving Tips, Smart Recommendations.
 ## Server-only Gemini
 
 - Key: `GEMINI_API_KEY` in `.env.local` (never `NEXT_PUBLIC_`)
-- Model: `GEMINI_MODEL` optional; default **`gemini-3.8-flash`** (multimodal image + PDF)
+- Models: `GEMINI_MODELS` ordered fallback (default `gemini-3.8-flash,gemini-3.1-flash-lite`); legacy `GEMINI_MODEL` still works as a one-item list
+- Resilience: 45s timeout, 2 retries with backoff on 503/429/timeout, then next model; client Retry button + real error text
+- Client compresses bill images (max 1600px, JPEG 0.8) before upload
 - Routes: `POST /api/bills/scan`, `POST /api/expenses/parse-nl`
 - Confirm paths: server actions `confirmBillScan`, `confirmNlExpense`
-- API failures return the real Gemini error text to the UI
 
 ---
 
