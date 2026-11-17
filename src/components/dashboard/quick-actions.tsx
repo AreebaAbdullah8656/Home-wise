@@ -2,6 +2,8 @@ import Link from "next/link";
 import {
   PlusCircle,
   Wallet,
+  ScanLine,
+  FileStack,
   ShoppingCart,
   PiggyBank,
   Home,
@@ -19,6 +21,8 @@ import { Button } from "@/components/ui/button";
 const actions = [
   { href: "/expenses", label: "Add expense", icon: PlusCircle },
   { href: "/budget", label: "Set monthly budget", icon: Wallet },
+  { href: "/scan-bill", label: "Scan a bill", icon: ScanLine },
+  { href: "/bills", label: "My bills", icon: FileStack },
   { href: "/savings", label: "Savings & emergency", icon: PiggyBank },
   { href: "/grocery", label: "Add grocery item", icon: ShoppingCart },
   { href: "/inventory", label: "Home inventory", icon: Home },
@@ -31,7 +35,8 @@ export function QuickActions() {
       <CardHeader>
         <CardTitle className="font-heading text-xl">Quick actions</CardTitle>
         <CardDescription>
-          Jump into live features. Reports open only when you choose.
+          Jump into live features. Bill upload is always optional. Reports open
+          only when you choose.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">

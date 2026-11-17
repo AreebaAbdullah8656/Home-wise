@@ -3,6 +3,8 @@ import {
   LayoutDashboard,
   Wallet,
   Receipt,
+  ScanLine,
+  FileStack,
   PiggyBank,
   ShoppingCart,
   Home,
@@ -19,7 +21,7 @@ export type NavItem = {
 
 /**
  * Deploy-ready sidebar — unfinished SPEC sections stay out of nav
- * (Scan a Bill, My Bills, Tips, Recommendations).
+ * (Tips, Recommendations).
  */
 export const NAV_ITEMS: NavItem[] = [
   {
@@ -39,6 +41,18 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/expenses",
     icon: Receipt,
     description: "Track daily spending",
+  },
+  {
+    title: "Scan a Bill",
+    href: "/scan-bill",
+    icon: ScanLine,
+    description: "Optional bill upload and review",
+  },
+  {
+    title: "My Bills",
+    href: "/bills",
+    icon: FileStack,
+    description: "Digital bill wallet",
   },
   {
     title: "Savings & Emergency",
@@ -74,8 +88,6 @@ export const NAV_ITEMS: NavItem[] = [
 
 /** Routes still hidden until their phases ship. Direct visits redirect home. */
 export const HIDDEN_FEATURE_ROUTES = [
-  "/scan-bill",
-  "/bills",
   "/tips",
   "/recommendations",
 ] as const;

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { ExpenseList } from "@/components/expenses/expense-list";
+import { NlExpenseEntry } from "@/components/expenses/nl-expense-entry";
 import {
   Card,
   CardContent,
@@ -15,6 +16,7 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSessionUser } from "@/lib/supabase/server";
 import { getCategoriesForUser, getExpenses } from "@/lib/finance/queries";
+import { isGeminiConfigured } from "@/lib/gemini/config";
 
 export const metadata: Metadata = { title: "Expenses" };
 
@@ -74,14 +76,30 @@ async function ExpensesContent({
     getCategoriesForUser(),
     getExpenses({ limit: 200 }),
   ]);
+  const geminiReady = isGeminiConfigured();
 
   return (
     <div className="space-y-6">
       <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle className="font-heading text-xl">Add expense</CardTitle>
+          <CardTitle className="font-heading text-xl">
+            Smart expense entry
+          </CardTitle>
           <CardDescription>
-            Manual entry only for Phase 4. No receipt upload required.
+            Describe spending in plain language. Review Gemini’s suggestion, then
+            confirm — nothing saves until you confirm.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NlExpenseEntry categories={categories} geminiReady={geminiReady} />
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="font-heading text-xl">Add expense manually</CardTitle>
+          <CardDescription>
+            No receipt upload required. Bill scanning is always optional.
           </CardDescription>
         </CardHeader>
         <CardContent>
