@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  getGeminiModelName,
   isGeminiConfigured,
   missingGeminiMessage,
 } from "@/lib/gemini/config";
+import { formatGeminiError, isGeminiApiError } from "@/lib/gemini/errors";
 import { parseBillWithGemini } from "@/lib/gemini/parse-bill";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
@@ -83,10 +85,17 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logAuthFailure("api.bills.scan", error);
-    const message =
-      error instanceof Error && /GEMINI_API_KEY/i.test(error.message)
-        ? error.message
-        : formatAuthError(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    let message: string;
+    if (error instanceof Error && /GEMINI_API_KEY/i.test(error.message)) {
+      message = error.message;
+    } else if (isGeminiApiError(error) || error instanceof Error) {
+      message = formatGeminiError(error);
+    } else {
+      message = formatAuthError(error);
+    }
+    return NextResponse.json(
+      { error: message, model: getGeminiModelName() },
+      { status: 500 }
+    );
   }
 }

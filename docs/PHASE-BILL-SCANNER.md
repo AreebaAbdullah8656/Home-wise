@@ -43,8 +43,10 @@ Still hidden: Smart Saving Tips, Smart Recommendations.
 ## Server-only Gemini
 
 - Key: `GEMINI_API_KEY` in `.env.local` (never `NEXT_PUBLIC_`)
+- Model: `GEMINI_MODEL` optional; default **`gemini-3.8-flash`** (multimodal image + PDF)
 - Routes: `POST /api/bills/scan`, `POST /api/expenses/parse-nl`
 - Confirm paths: server actions `confirmBillScan`, `confirmNlExpense`
+- API failures return the real Gemini error text to the UI
 
 ---
 

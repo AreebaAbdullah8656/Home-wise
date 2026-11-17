@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  getGeminiModelName,
   isGeminiConfigured,
   missingGeminiMessage,
 } from "@/lib/gemini/config";
+import { formatGeminiError, isGeminiApiError } from "@/lib/gemini/errors";
 import { parseNlExpenseWithGemini } from "@/lib/gemini/parse-nl-expense";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 import { todayIso } from "@/lib/budget-math";
@@ -52,12 +54,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, suggestion });
   } catch (error) {
     logAuthFailure("api.expenses.parse-nl", error);
-    const message =
-      error instanceof Error && /GEMINI_API_KEY|Zod|JSON/i.test(error.message)
-        ? error.message.includes("GEMINI_API_KEY")
-          ? error.message
-          : "Could not parse that expense. Try clearer wording (name + amount + date)."
-        : formatAuthError(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    let message: string;
+    if (error instanceof Error && /GEMINI_API_KEY/i.test(error.message)) {
+      message = error.message;
+    } else if (isGeminiApiError(error)) {
+      message = formatGeminiError(error);
+    } else if (
+      error instanceof Error &&
+      (/Zod|JSON|Unexpected token/i.test(error.message) ||
+        error.name === "ZodError")
+    ) {
+      message =
+        "Could not parse that expense. Try clearer wording (name + amount + date).";
+    } else if (error instanceof Error && error.message.trim()) {
+      message = formatGeminiError(error);
+    } else {
+      message = formatAuthError(error);
+    }
+    return NextResponse.json(
+      { error: message, model: getGeminiModelName() },
+      { status: 500 }
+    );
   }
 }
