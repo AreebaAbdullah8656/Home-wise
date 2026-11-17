@@ -20,14 +20,23 @@ import {
 import { formatPkr } from "@/lib/format";
 import { toNumber } from "@/lib/budget-math";
 import type { BillWithItems } from "@/lib/finance/bills";
+import { BillItemSuggestions } from "@/components/recommendations/bill-item-suggestions";
 
 const initial: ActionState = {};
 
 type BillsListProps = {
   bills: BillWithItems[];
+  signedIn?: boolean;
+  savedRecKeys?: string[];
+  dismissedRecKeys?: string[];
 };
 
-export function BillsList({ bills }: BillsListProps) {
+export function BillsList({
+  bills,
+  signedIn = false,
+  savedRecKeys = [],
+  dismissedRecKeys = [],
+}: BillsListProps) {
   const [search, setSearch] = useState("");
   const [store, setStore] = useState("");
   const [from, setFrom] = useState("");
@@ -273,6 +282,12 @@ export function BillsList({ bills }: BillsListProps) {
                   </li>
                 ))}
               </ul>
+              <BillItemSuggestions
+                items={viewing.bill_items ?? []}
+                signedIn={signedIn}
+                savedKeys={savedRecKeys}
+                dismissedKeys={dismissedRecKeys}
+              />
             </div>
           ) : null}
         </DialogContent>

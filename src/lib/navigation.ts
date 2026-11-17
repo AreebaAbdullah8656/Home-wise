@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Home,
   Lightbulb,
+  Sparkles,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -20,9 +21,7 @@ export type NavItem = {
   description: string;
 };
 
-/**
- * Deploy-ready sidebar — Smart Recommendations stays hidden until shipped.
- */
+/** Deploy-ready sidebar — all SPEC §16 sections except none currently hidden. */
 export const NAV_ITEMS: NavItem[] = [
   {
     title: "Dashboard",
@@ -79,6 +78,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Practical money-saving advice",
   },
   {
+    title: "Smart Recommendations",
+    href: "/recommendations",
+    icon: Sparkles,
+    description: "Sample affordable alternatives",
+  },
+  {
     title: "Reports",
     href: "/reports",
     icon: BarChart3,
@@ -92,5 +97,5 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-/** Routes still hidden. Direct visits redirect home. */
-export const HIDDEN_FEATURE_ROUTES = ["/recommendations"] as const;
+/** Routes still hidden from nav / treated as unfinished. Empty when all shipped. */
+export const HIDDEN_FEATURE_ROUTES = [] as const;

@@ -14,10 +14,9 @@ HomeWise helps households manage budgets, track expenses, organize groceries, st
 - **Grocery List** — priorities, mark purchased → expense once
 - **Home Inventory** — stock status, low-stock reminders, add to grocery without duplicates
 - **Smart Saving Tips** — categorized advice with bookmarks
+- **Smart Recommendations** — sample affordable alternatives & discovery (no cart/checkout); optional bill-based suggestions
 - **Reports** — weekly/monthly charts only when you open Reports
 - **Settings** — profile, currency (PKR default, changeable), optional location
-
-**Not in this release:** Smart Recommendations (route stays hidden).
 
 ## Stack
 

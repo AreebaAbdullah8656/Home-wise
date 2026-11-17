@@ -90,7 +90,8 @@ async function SettingsContent() {
           <CardTitle className="font-heading text-xl">Preferences</CardTitle>
           <CardDescription>
             Bill upload stays optional. Reports never open automatically. Smart
-            Recommendations is not enabled in this release.
+            Recommendations uses clearly labeled sample data only — no cart or
+            checkout.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">

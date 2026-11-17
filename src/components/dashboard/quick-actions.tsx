@@ -8,6 +8,7 @@ import {
   PiggyBank,
   Home,
   Lightbulb,
+  Sparkles,
   BarChart3,
 } from "lucide-react";
 import {
@@ -28,6 +29,7 @@ const actions = [
   { href: "/grocery", label: "Add grocery item", icon: ShoppingCart },
   { href: "/inventory", label: "Home inventory", icon: Home },
   { href: "/tips", label: "Saving tips", icon: Lightbulb },
+  { href: "/recommendations", label: "Recommendations", icon: Sparkles },
   { href: "/reports", label: "Open reports", icon: BarChart3 },
 ] as const;
 

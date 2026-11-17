@@ -16,6 +16,10 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSessionUser } from "@/lib/supabase/server";
 import { getBills } from "@/lib/finance/bills";
+import {
+  getDismissedRecommendationKeys,
+  getSavedRecommendationKeys,
+} from "@/lib/recommendations/queries";
 
 export const metadata: Metadata = { title: "My Bills" };
 export const instant = false;
@@ -52,7 +56,11 @@ async function BillsContent() {
     );
   }
 
-  const bills = await getBills();
+  const [bills, savedRecKeys, dismissedRecKeys] = await Promise.all([
+    getBills(),
+    getSavedRecommendationKeys(),
+    getDismissedRecommendationKeys(),
+  ]);
 
   return (
     <Card className="shadow-sm">
@@ -61,7 +69,8 @@ async function BillsContent() {
           <CardTitle className="font-heading text-xl">Confirmed bills</CardTitle>
           <CardDescription>
             Search, open originals, download, or delete. Only your bills via
-            RLS + private storage.
+            RLS + private storage. Optional sample alternatives appear when you
+            open a bill — never auto-applied.
           </CardDescription>
         </div>
         <Button nativeButton={false} render={<Link href="/scan-bill" />}>
@@ -69,7 +78,12 @@ async function BillsContent() {
         </Button>
       </CardHeader>
       <CardContent>
-        <BillsList bills={bills} />
+        <BillsList
+          bills={bills}
+          signedIn
+          savedRecKeys={[...savedRecKeys]}
+          dismissedRecKeys={[...dismissedRecKeys]}
+        />
       </CardContent>
     </Card>
   );
