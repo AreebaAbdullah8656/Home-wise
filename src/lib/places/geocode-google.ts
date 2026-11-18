@@ -10,11 +10,13 @@ type GeocodeOk = {
   location: LatLng;
   formattedAddress: string;
   cached: boolean;
+  provider: "google";
 };
 
 type GeocodeErr = {
   ok: false;
   message: string;
+  httpStatus?: number;
 };
 
 export type GeocodeResult = GeocodeOk | GeocodeErr;
@@ -36,7 +38,12 @@ export async function geocodeWithGoogle(
   const key = `google-geo:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(key);
   if (cached) {
-    return { ok: true, ...cached.value, cached: true };
+    return {
+      ok: true,
+      ...cached.value,
+      cached: true,
+      provider: "google",
+    };
   }
 
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
@@ -62,6 +69,7 @@ export async function geocodeWithGoogle(
   if (!response.ok) {
     return {
       ok: false,
+      httpStatus: response.status,
       message: `Geocoding HTTP ${response.status}. Check Geocoding API is enabled for your key.`,
     };
   }
@@ -96,5 +104,5 @@ export async function geocodeWithGoogle(
     formattedAddress: first.formatted_address ?? trimmed,
   };
   cacheSet(key, value);
-  return { ok: true, ...value, cached: false };
+  return { ok: true, ...value, cached: false, provider: "google" };
 }

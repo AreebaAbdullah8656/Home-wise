@@ -1,4 +1,5 @@
 import {
+  getNominatimAcceptLanguage,
   getNominatimUrl,
   getOsmUserAgent,
   NOMINATIM_CACHE_TTL_MS,
@@ -7,16 +8,21 @@ import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
 import { withNominatimRateLimit } from "@/lib/places/rate-limit";
 import type { LatLng } from "@/lib/places/types";
 
-type GeocodeOk = {
-  ok: true;
+type GeocodePayload = {
   location: LatLng;
   formattedAddress: string;
+};
+
+type GeocodeOk = GeocodePayload & {
+  ok: true;
   cached: boolean;
+  provider: "nominatim";
 };
 
 type GeocodeErr = {
   ok: false;
   message: string;
+  httpStatus?: number;
 };
 
 export type GeocodeResult = GeocodeOk | GeocodeErr;
@@ -27,9 +33,17 @@ type NominatimResult = {
   display_name?: string;
 };
 
+function nominatimHeaders(): HeadersInit {
+  return {
+    Accept: "application/json",
+    "Accept-Language": getNominatimAcceptLanguage(),
+    "User-Agent": getOsmUserAgent(),
+  };
+}
+
 /**
  * Nominatim forward geocode — server-side only.
- * Honors User-Agent, caching, and ~1 req/s rate limit.
+ * Honors identifying User-Agent + Accept-Language, caching, and ~1 req/s.
  */
 export async function geocodeWithNominatim(
   address: string
@@ -40,12 +54,28 @@ export async function geocodeWithNominatim(
   }
 
   const cacheKey = `osm-geo:${cacheKeyGeocode(trimmed)}`;
-  const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(cacheKey);
+  const cached = cacheGet<GeocodePayload>(cacheKey);
   if (cached) {
-    return { ok: true, ...cached.value, cached: true };
+    return {
+      ok: true,
+      ...cached.value,
+      cached: true,
+      provider: "nominatim",
+    };
   }
 
   return withNominatimRateLimit(async () => {
+    // Re-check cache inside the rate-limit gate (another waiter may have filled it).
+    const again = cacheGet<GeocodePayload>(cacheKey);
+    if (again) {
+      return {
+        ok: true,
+        ...again.value,
+        cached: true,
+        provider: "nominatim",
+      };
+    }
+
     const url = new URL(`${getNominatimUrl().replace(/\/$/, "")}/search`);
     url.searchParams.set("q", trimmed);
     url.searchParams.set("format", "json");
@@ -56,10 +86,7 @@ export async function geocodeWithNominatim(
     try {
       response = await fetch(url.toString(), {
         method: "GET",
-        headers: {
-          Accept: "application/json",
-          "User-Agent": getOsmUserAgent(),
-        },
+        headers: nominatimHeaders(),
         cache: "no-store",
       });
     } catch (error) {
@@ -73,9 +100,16 @@ export async function geocodeWithNominatim(
     }
 
     if (!response.ok) {
+      const hint =
+        response.status === 403
+          ? " Access denied — check User-Agent/contact email, allow device location to skip geocoding, or wait and retry."
+          : response.status === 429
+            ? " Rate limited — wait a moment, allow device location to skip geocoding, or retry."
+            : " Try again later or set a clearer Settings location.";
       return {
         ok: false,
-        message: `Nominatim HTTP ${response.status}. Try again later or set a clearer Settings location.`,
+        httpStatus: response.status,
+        message: `Nominatim HTTP ${response.status}.${hint}`,
       };
     }
 
@@ -94,11 +128,11 @@ export async function geocodeWithNominatim(
       return { ok: false, message: "Nominatim returned no coordinates." };
     }
 
-    const value = {
+    const value: GeocodePayload = {
       location: { latitude: lat, longitude: lng },
       formattedAddress: first.display_name?.trim() || trimmed,
     };
     cacheSet(cacheKey, value, NOMINATIM_CACHE_TTL_MS);
-    return { ok: true, ...value, cached: false };
+    return { ok: true, ...value, cached: false, provider: "nominatim" };
   });
 }

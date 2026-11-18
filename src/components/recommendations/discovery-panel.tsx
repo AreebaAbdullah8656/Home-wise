@@ -60,6 +60,7 @@ type LiveApiErr = {
   ok: false;
   code?: string;
   message: string;
+  httpStatus?: number;
   lastVerifiedAt?: string;
   provider?: "osm" | "google";
 };
@@ -341,8 +342,19 @@ export function DiscoveryPanel({
       {live && !live.ok ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           <p className="font-medium text-foreground">No live results</p>
+          {live.httpStatus != null ? (
+            <p className="mt-2 font-mono text-xs text-foreground">
+              HTTP {live.httpStatus}
+              {live.code ? ` · ${live.code}` : ""}
+            </p>
+          ) : live.code ? (
+            <p className="mt-2 font-mono text-xs text-foreground">{live.code}</p>
+          ) : null}
           <p className="mt-2">{live.message}</p>
-          <p className="mt-2">Sample data is never shown as a fallback.</p>
+          <p className="mt-2">
+            Tip: allow device location to skip geocoding, or set a clearer city
+            in Settings. Sample data is never shown as a fallback.
+          </p>
         </div>
       ) : null}
 

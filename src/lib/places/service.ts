@@ -51,6 +51,7 @@ type ResolveErr = {
     | "invalid_coordinates"
     | "missing_api_key";
   message: string;
+  httpStatus?: number;
 };
 
 export async function resolveCenter(input: {
@@ -95,7 +96,12 @@ export async function resolveCenter(input: {
 
   const geo = await geocodeAddress(address);
   if (!geo.ok) {
-    return { ok: false, errorCode: "geocode_failed", message: geo.message };
+    return {
+      ok: false,
+      errorCode: "geocode_failed",
+      message: geo.message,
+      httpStatus: geo.httpStatus,
+    };
   }
 
   return {
@@ -125,6 +131,7 @@ export async function fetchNearbyLivePlaces(input: {
       ok: false,
       code: resolved.errorCode,
       message: resolved.message,
+      httpStatus: resolved.httpStatus,
       provider,
       lastVerifiedAt: now,
     };
@@ -212,6 +219,7 @@ export async function fetchTextSearchLivePlaces(input: {
       ok: false,
       code: resolved.errorCode,
       message: resolved.message,
+      httpStatus: resolved.httpStatus,
       provider,
       lastVerifiedAt: now,
     };

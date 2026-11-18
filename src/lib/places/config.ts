@@ -57,14 +57,35 @@ export const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_NEARBY_RADIUS_M = 5000;
 
 /**
- * OSM/Nominatim/Overpass identifying User-Agent (required — missing UA → Overpass 406).
- * Override with NOMINATIM_USER_AGENT in .env.local if you have a contact email/URL.
+ * Contact email embedded in Nominatim/Overpass User-Agent (usage policy).
+ * Nominatim returns HTTP 403 for missing UA or placeholder example.com contacts.
+ */
+export const DEFAULT_NOMINATIM_CONTACT_EMAIL =
+  "abdulahad.abdullah8656@gmail.com";
+
+export function getNominatimContactEmail(): string {
+  return (
+    process.env.NOMINATIM_CONTACT_EMAIL?.trim() ||
+    DEFAULT_NOMINATIM_CONTACT_EMAIL
+  );
+}
+
+/** Accept-Language for Nominatim (and shared OSM geocode fetches). */
+export function getNominatimAcceptLanguage(): string {
+  return process.env.NOMINATIM_ACCEPT_LANGUAGE?.trim() || "en";
+}
+
+/**
+ * OSM/Nominatim/Overpass identifying User-Agent.
+ * Missing / non-identifying UA → Nominatim 403; Overpass 406.
+ * Full override: NOMINATIM_USER_AGENT or OVERPASS_USER_AGENT.
+ * Otherwise: HomeWise/1.0 (contact: <NOMINATIM_CONTACT_EMAIL>).
  */
 export function getOsmUserAgent(): string {
   return (
     process.env.NOMINATIM_USER_AGENT?.trim() ||
     process.env.OVERPASS_USER_AGENT?.trim() ||
-    "HomeWise/1.0 (household-budget-app; contact: homewise-dev@example.com)"
+    `HomeWise/1.0 (contact: ${getNominatimContactEmail()})`
   );
 }
 

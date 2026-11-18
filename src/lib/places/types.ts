@@ -71,6 +71,8 @@ export type LivePlacesError = {
     | "places_failed"
     | "invalid_coordinates";
   message: string;
+  /** Upstream HTTP status when known (e.g. Nominatim 403). */
+  httpStatus?: number;
   provider: "osm" | "google";
   lastVerifiedAt: string;
 };
