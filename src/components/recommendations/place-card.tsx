@@ -44,7 +44,7 @@ export function PlaceCard({
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">Live · Google Places</Badge>
+        <Badge variant="secondary">Live · {place.source}</Badge>
         {place.primaryType ? (
           <Badge variant="outline">{place.primaryType.replace(/_/g, " ")}</Badge>
         ) : null}
@@ -91,7 +91,7 @@ export function PlaceCard({
         <div>
           <dt className="text-muted-foreground">Product price</dt>
           <dd className="text-foreground">
-            Not available from Google Places (not invented)
+            Not available from {place.source} (not invented)
           </dd>
         </div>
         <div>
@@ -131,7 +131,9 @@ export function PlaceCard({
               />
             }
           >
-            Maps / directions
+            {place.source === "OpenStreetMap"
+              ? "OpenStreetMap"
+              : "Maps / directions"}
           </Button>
         ) : null}
         {place.websiteUrl ? (

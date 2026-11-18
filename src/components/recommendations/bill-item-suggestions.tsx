@@ -44,15 +44,7 @@ export function BillItemSuggestions({
 
   const placeCount = visible.reduce((n, m) => n + m.places.length, 0);
 
-  if (!placesConfigured) {
-    return (
-      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-        Live store suggestions need GOOGLE_MAPS_API_KEY. No sample alternatives
-        are shown.
-      </div>
-    );
-  }
-
+  if (!placesConfigured) return null;
   if (visible.length === 0) return null;
 
   return (
@@ -73,8 +65,9 @@ export function BillItemSuggestions({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Google Places text search for confirmed line items near your location.
-        No invented product prices. Expand only if you want to see them.
+        Live OSM/Places text search for confirmed line items near your
+        location. No invented product prices. Expand only if you want to see
+        them.
       </p>
       {open ? (
         <div className="space-y-4">

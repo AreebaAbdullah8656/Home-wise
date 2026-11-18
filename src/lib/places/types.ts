@@ -3,6 +3,8 @@ export type LatLng = {
   longitude: number;
 };
 
+export type PlaceSource = "OpenStreetMap" | "Google Places";
+
 /** Delivery status — never invent free delivery. */
 export type DeliveryInfo =
   | {
@@ -40,9 +42,9 @@ export type LivePlace = {
   phone: string | null;
   location: LatLng | null;
   delivery: DeliveryInfo;
-  /** Product prices are not provided by Places — always null here. */
+  /** Product prices are never invented — always null from OSM/Places. */
   verifiedProductPrice: null;
-  source: "Google Places";
+  source: PlaceSource;
   attributions: string[];
   lastVerifiedAt: string;
 };
@@ -54,6 +56,7 @@ export type LivePlacesResult = {
   radiusMeters: number;
   locationSource: "device" | "profile" | "query";
   locationLabel: string | null;
+  provider: "osm" | "google";
   lastVerifiedAt: string;
   cached: boolean;
   cacheExpiresAt: string | null;
@@ -68,6 +71,7 @@ export type LivePlacesError = {
     | "places_failed"
     | "invalid_coordinates";
   message: string;
+  provider: "osm" | "google";
   lastVerifiedAt: string;
 };
 

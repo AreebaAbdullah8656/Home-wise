@@ -14,8 +14,9 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSessionUser } from "@/lib/supabase/server";
 import {
-  isGooglePlacesConfigured,
-  missingPlacesMessage,
+  getPlacesProvider,
+  placesProviderLabel,
+  missingGoogleKeyHint,
 } from "@/lib/places/config";
 import {
   getBillPlaceMatches,
@@ -34,14 +35,15 @@ function Fallback() {
     <EmptyState
       icon={Sparkles}
       title="Loading live recommendations…"
-      description="Fetching Google Places near your location."
+      description="Fetching nearby shops for your location."
     />
   );
 }
 
 async function RecommendationsContent() {
   const configured = isSupabaseConfigured();
-  const placesConfigured = isGooglePlacesConfigured();
+  const provider = getPlacesProvider();
+  const providerLabel = placesProviderLabel(provider);
   const user = configured ? await getSessionUser() : null;
   const signedIn = Boolean(user);
 
@@ -53,7 +55,7 @@ async function RecommendationsContent() {
           getDismissedRecommendationKeys(),
           getProfileLocation(),
           getInitialLivePlaces(),
-          placesConfigured ? getBillPlaceMatches() : Promise.resolve([]),
+          getBillPlaceMatches(),
         ])
       : [
           [],
@@ -71,14 +73,18 @@ async function RecommendationsContent() {
           Live shopping discovery
         </CardTitle>
         <CardDescription>
-          Nearby stores from Google Places. No sample catalogs, no invented
-          prices, no cart or checkout.
+          Nearby stores via {providerLabel}
+          {provider === "osm" ? " (default, free)" : " (GOOGLE_MAPS_API_KEY)"}.
+          No sample catalogs, no invented prices, no cart or checkout.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <DiscoveryPanel
-          placesConfigured={placesConfigured}
-          missingKeyMessage={missingPlacesMessage()}
+          provider={provider}
+          providerLabel={providerLabel}
+          providerHint={
+            provider === "osm" ? missingGoogleKeyHint() : undefined
+          }
           signedIn={signedIn}
           profileLocation={profileLocation}
           initialLive={initialLive}
@@ -97,7 +103,7 @@ export default function RecommendationsPage() {
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Smart Recommendations"
-        description="Live location-based stores via Google Places — external links only."
+        description="Live location-based stores (OpenStreetMap by default) — external links only."
       />
       <Suspense fallback={<Fallback />}>
         <RecommendationsContent />

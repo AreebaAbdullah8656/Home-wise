@@ -29,7 +29,11 @@ function parsePlace(formData: FormData): PlaceRecommendationPayload | null {
   if (!raw) return null;
   try {
     const place = JSON.parse(raw) as LivePlace;
-    if (!place?.placeId || !place?.name || place.source !== "Google Places") {
+    if (
+      !place?.placeId ||
+      !place?.name ||
+      (place.source !== "Google Places" && place.source !== "OpenStreetMap")
+    ) {
       return null;
     }
     const kindRaw = String(formData.get("kind") ?? "live_place");

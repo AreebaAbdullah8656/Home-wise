@@ -46,6 +46,7 @@ type LiveApiOk = {
   cacheExpiresAt: string | null;
   locationSource: "device" | "profile" | "query";
   locationLabel: string | null;
+  provider?: "osm" | "google";
   sections: {
     nearbyStores: LivePlace[];
     bestLocalOptions: LivePlace[];
@@ -60,11 +61,13 @@ type LiveApiErr = {
   code?: string;
   message: string;
   lastVerifiedAt?: string;
+  provider?: "osm" | "google";
 };
 
 type DiscoveryPanelProps = {
-  placesConfigured: boolean;
-  missingKeyMessage: string;
+  provider: "osm" | "google";
+  providerLabel: string;
+  providerHint?: string;
   signedIn: boolean;
   profileLocation: string | null;
   initialLive: LivePlacesResponse;
@@ -75,8 +78,9 @@ type DiscoveryPanelProps = {
 };
 
 export function DiscoveryPanel({
-  placesConfigured,
-  missingKeyMessage,
+  provider,
+  providerLabel,
+  providerHint,
   signedIn,
   profileLocation,
   initialLive,
@@ -97,6 +101,7 @@ export function DiscoveryPanel({
           cacheExpiresAt: initialLive.cacheExpiresAt,
           locationSource: initialLive.locationSource,
           locationLabel: initialLive.locationLabel,
+          provider: initialLive.provider,
           sections: (() => {
             const p = partitionLivePlaces(initialLive.places);
             return {
@@ -135,7 +140,6 @@ export function DiscoveryPanel({
       q?: string;
       refresh?: boolean;
     }) => {
-      if (!placesConfigured) return;
       setLoading(true);
       setGeoNote(null);
       try {
@@ -159,17 +163,17 @@ export function DiscoveryPanel({
               ? error.message
               : "Failed to refresh live recommendations.",
           lastVerifiedAt: new Date().toISOString(),
+          provider,
         });
       } finally {
         setLoading(false);
       }
     },
-    [placesConfigured]
+    [provider]
   );
 
   // Auto-refresh on mount/revisit; prefer device location when allowed.
   useEffect(() => {
-    if (!placesConfigured) return;
     let cancelled = false;
     if (!navigator.geolocation) {
       setGeoNote(
@@ -205,9 +209,15 @@ export function DiscoveryPanel({
     return () => {
       cancelled = true;
     };
-  }, [placesConfigured, profileLocation, loadLive]);
+  }, [profileLocation, loadLive]);
 
   const sections = live && live.ok ? live.sections : null;
+  const activeProviderLabel =
+    live && "provider" in live && live.provider
+      ? live.provider === "google"
+        ? "Google Places"
+        : "OpenStreetMap"
+      : providerLabel;
   const listForSection = useMemo(() => {
     if (!sections) return [] as LivePlace[];
     switch (section) {
@@ -237,31 +247,18 @@ export function DiscoveryPanel({
     [billMatches, dismissedSet]
   );
 
-  if (!placesConfigured) {
-    return (
-      <div className="space-y-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
-        <p className="font-heading text-lg text-foreground">
-          Live recommendations unavailable
-        </p>
-        <p className="mx-auto max-w-xl text-sm text-muted-foreground">
-          {missingKeyMessage}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          No sample or placeholder stores are shown.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm text-accent-foreground">
-        <p className="font-medium">Live Google Places data only</p>
+        <p className="font-medium">Live data · {activeProviderLabel}</p>
         <p className="mt-1">
-          External redirect assistant — no cart, checkout, or payments. Product
-          prices and free delivery appear only when verified; otherwise we show
-          an honest empty or unavailable state.
+          External redirect assistant — no cart, checkout, or payments. Shop
+          name, type, address, and map links only. Prices and free delivery are
+          never invented.
         </p>
+        {providerHint ? (
+          <p className="mt-1 text-xs text-muted-foreground">{providerHint}</p>
+        ) : null}
         <p className="mt-2 text-xs">
           {geoNote || "Resolving location…"}
           {profileLocation ? ` · Settings location: ${profileLocation}` : ""}
@@ -353,8 +350,8 @@ export function DiscoveryPanel({
         <div className="space-y-4">
           <h2 className="font-heading text-xl">From your bills</h2>
           <p className="text-sm text-muted-foreground">
-            Live Places text search for confirmed bill item names near your
-            location. No invented product prices.
+            Live text search ({activeProviderLabel}) for confirmed bill item
+            names near your location. No invented product prices.
           </p>
           {filteredBillMatches.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -415,7 +412,8 @@ export function DiscoveryPanel({
                   payload &&
                   typeof payload === "object" &&
                   payload.place &&
-                  payload.place.source === "Google Places"
+                  (payload.place.source === "Google Places" ||
+                    payload.place.source === "OpenStreetMap")
                     ? payload.place
                     : null;
                 if (!place) {
@@ -426,7 +424,7 @@ export function DiscoveryPanel({
                     >
                       <p className="font-medium">{row.title}</p>
                       <p className="text-muted-foreground">
-                        Saved entry is not a live Google Places record (removed
+                        Saved entry is not a live OSM/Places record (removed
                         sample payloads are not re-displayed as stores).
                       </p>
                       <form action={removeAction} className="mt-2">
@@ -473,16 +471,22 @@ export function DiscoveryPanel({
           {section === "free" ? (
             <p className="text-sm text-muted-foreground">
               Free home delivery is listed only when explicitly confirmed.
-              Google Places can report that delivery exists, but not that it is
-              free — those places appear under Nearby / Best Local with
-              “cost not verified free,” not here.
+              {activeProviderLabel} does not confirm free delivery — OSM shows
+              “Delivery information unavailable”; Google may note delivery
+              exists without verifying it is free.
             </p>
           ) : null}
           {section === "price" ? (
             <p className="text-sm text-muted-foreground">
-              Google Places does not provide verified product unit prices.
-              HomeWise will not invent prices. This section stays empty until a
-              verified price source is connected.
+              {activeProviderLabel} does not provide verified product unit
+              prices. HomeWise will not invent prices. This section stays empty
+              until a verified price source is connected.
+            </p>
+          ) : null}
+          {section === "best" && provider === "osm" ? (
+            <p className="text-sm text-muted-foreground">
+              OpenStreetMap shop data has no star ratings — Best Local Options
+              stays empty unless a rated Google Places result is used.
             </p>
           ) : null}
           {listForSection.length === 0 ? (
@@ -492,7 +496,7 @@ export function DiscoveryPanel({
                 : section === "price"
                   ? "No verified product prices available."
                   : section === "online"
-                    ? "No nearby places with a verified website from Google Places."
+                    ? `No nearby places with a website tag from ${activeProviderLabel}.`
                     : section === "best"
                       ? "No rated local places in the live result set."
                       : "No nearby stores found for this location."}

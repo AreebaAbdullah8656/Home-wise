@@ -1,7 +1,8 @@
 import {
   DEFAULT_NEARBY_RADIUS_M,
-  isGooglePlacesConfigured,
-  missingPlacesMessage,
+  getPlacesProvider,
+  placesProviderLabel,
+  type PlacesProvider,
 } from "@/lib/places/config";
 import {
   cacheGet,
@@ -11,6 +12,10 @@ import {
 } from "@/lib/places/cache";
 import { geocodeAddress } from "@/lib/places/geocode";
 import { searchNearbyStores, searchPlacesByText } from "@/lib/places/client";
+import {
+  searchNearbyOsmStores,
+  searchOsmPlacesByText,
+} from "@/lib/places/osm-overpass";
 import type {
   LatLng,
   LivePlace,
@@ -53,14 +58,6 @@ export async function resolveCenter(input: {
   longitude?: number | null;
   address?: string | null;
 }): Promise<ResolveOk | ResolveErr> {
-  if (!isGooglePlacesConfigured()) {
-    return {
-      ok: false,
-      errorCode: "missing_api_key",
-      message: missingPlacesMessage(),
-    };
-  }
-
   if (
     input.latitude != null &&
     input.longitude != null &&
@@ -109,6 +106,10 @@ export async function resolveCenter(input: {
   };
 }
 
+function providerPrefix(provider: PlacesProvider) {
+  return provider === "google" ? "google" : "osm";
+}
+
 export async function fetchNearbyLivePlaces(input: {
   latitude?: number | null;
   longitude?: number | null;
@@ -117,22 +118,24 @@ export async function fetchNearbyLivePlaces(input: {
   bypassCache?: boolean;
 }): Promise<LivePlacesResponse> {
   const now = new Date().toISOString();
+  const provider = getPlacesProvider();
   const resolved = await resolveCenter(input);
   if (!resolved.ok) {
     return {
       ok: false,
       code: resolved.errorCode,
       message: resolved.message,
+      provider,
       lastVerifiedAt: now,
     };
   }
 
   const radius = input.radiusMeters ?? DEFAULT_NEARBY_RADIUS_M;
-  const key = cacheKeyNearby(
+  const key = `${providerPrefix(provider)}:${cacheKeyNearby(
     resolved.center.latitude,
     resolved.center.longitude,
     radius
-  );
+  )}`;
 
   if (!input.bypassCache) {
     const cached = cacheGet<LivePlace[]>(key);
@@ -144,6 +147,7 @@ export async function fetchNearbyLivePlaces(input: {
         radiusMeters: radius,
         locationSource: resolved.locationSource,
         locationLabel: resolved.locationLabel,
+        provider,
         lastVerifiedAt: new Date(cached.verifiedAt).toISOString(),
         cached: true,
         cacheExpiresAt: new Date(cached.expiresAt).toISOString(),
@@ -151,12 +155,17 @@ export async function fetchNearbyLivePlaces(input: {
     }
   }
 
-  const result = await searchNearbyStores(resolved.center, radius);
+  const result =
+    provider === "google"
+      ? await searchNearbyStores(resolved.center, radius)
+      : await searchNearbyOsmStores(resolved.center, radius);
+
   if (!result.ok) {
     return {
       ok: false,
       code: "places_failed",
-      message: result.message,
+      message: `${placesProviderLabel(provider)}: ${result.message}`,
+      provider,
       lastVerifiedAt: now,
     };
   }
@@ -169,6 +178,7 @@ export async function fetchNearbyLivePlaces(input: {
     radiusMeters: radius,
     locationSource: resolved.locationSource,
     locationLabel: resolved.locationLabel,
+    provider,
     lastVerifiedAt: new Date(verifiedAt).toISOString(),
     cached: false,
     cacheExpiresAt: new Date(expiresAt).toISOString(),
@@ -184,12 +194,14 @@ export async function fetchTextSearchLivePlaces(input: {
   bypassCache?: boolean;
 }): Promise<LivePlacesResponse> {
   const now = new Date().toISOString();
+  const provider = getPlacesProvider();
   const query = input.query.trim();
   if (!query) {
     return {
       ok: false,
       code: "places_failed",
       message: "Search query is empty.",
+      provider,
       lastVerifiedAt: now,
     };
   }
@@ -200,17 +212,18 @@ export async function fetchTextSearchLivePlaces(input: {
       ok: false,
       code: resolved.errorCode,
       message: resolved.message,
+      provider,
       lastVerifiedAt: now,
     };
   }
 
   const radius = input.radiusMeters ?? DEFAULT_NEARBY_RADIUS_M;
-  const key = cacheKeyText(
+  const key = `${providerPrefix(provider)}:${cacheKeyText(
     resolved.center.latitude,
     resolved.center.longitude,
     query,
     radius
-  );
+  )}`;
 
   if (!input.bypassCache) {
     const cached = cacheGet<LivePlace[]>(key);
@@ -222,6 +235,7 @@ export async function fetchTextSearchLivePlaces(input: {
         radiusMeters: radius,
         locationSource: resolved.locationSource,
         locationLabel: resolved.locationLabel,
+        provider,
         lastVerifiedAt: new Date(cached.verifiedAt).toISOString(),
         cached: true,
         cacheExpiresAt: new Date(cached.expiresAt).toISOString(),
@@ -229,12 +243,17 @@ export async function fetchTextSearchLivePlaces(input: {
     }
   }
 
-  const result = await searchPlacesByText(query, resolved.center, radius);
+  const result =
+    provider === "google"
+      ? await searchPlacesByText(query, resolved.center, radius)
+      : await searchOsmPlacesByText(query, resolved.center, radius);
+
   if (!result.ok) {
     return {
       ok: false,
       code: "places_failed",
-      message: result.message,
+      message: `${placesProviderLabel(provider)}: ${result.message}`,
+      provider,
       lastVerifiedAt: now,
     };
   }
@@ -247,9 +266,9 @@ export async function fetchTextSearchLivePlaces(input: {
     radiusMeters: radius,
     locationSource: resolved.locationSource,
     locationLabel: resolved.locationLabel,
+    provider,
     lastVerifiedAt: new Date(verifiedAt).toISOString(),
     cached: false,
     cacheExpiresAt: new Date(expiresAt).toISOString(),
   };
 }
-

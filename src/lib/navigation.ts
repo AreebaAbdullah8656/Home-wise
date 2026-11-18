@@ -81,7 +81,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Smart Recommendations",
     href: "/recommendations",
     icon: Sparkles,
-    description: "Live nearby stores via Google Places",
+    description: "Live nearby stores (OSM / Places)",
   },
   {
     title: "Reports",

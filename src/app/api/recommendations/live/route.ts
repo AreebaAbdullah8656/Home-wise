@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
+import { connection } from "next/server";
 import {
   fetchNearbyLivePlaces,
   fetchTextSearchLivePlaces,
   partitionLivePlaces,
 } from "@/lib/places/service";
-import { isGooglePlacesConfigured, missingPlacesMessage } from "@/lib/places/config";
+import {
+  getPlacesProvider,
+  placesProviderLabel,
+} from "@/lib/places/config";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { connection } from "next/server";
 
 async function readProfileLocation(): Promise<string | null> {
   if (!isSupabaseConfigured()) return null;
@@ -23,7 +26,8 @@ async function readProfileLocation(): Promise<string | null> {
 }
 
 /**
- * Live nearby recommendations from Google Places.
+ * Live nearby recommendations.
+ * Provider: OpenStreetMap by default; Google Places when GOOGLE_MAPS_API_KEY is set.
  * Never returns sample/fake store data.
  */
 export async function GET(request: Request) {
@@ -36,19 +40,7 @@ export async function GET(request: Request) {
   const latitude = latRaw != null && latRaw !== "" ? Number(latRaw) : null;
   const longitude = lngRaw != null && lngRaw !== "" ? Number(lngRaw) : null;
 
-  if (!isGooglePlacesConfigured()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "missing_api_key",
-        message: missingPlacesMessage(),
-        lastVerifiedAt: new Date().toISOString(),
-        sections: emptySections(),
-      },
-      { status: 503 }
-    );
-  }
-
+  const provider = getPlacesProvider();
   const address = await readProfileLocation();
   const baseInput = {
     latitude,
@@ -65,15 +57,17 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ...live,
+        providerLabel: placesProviderLabel(live.provider),
         sections: emptySections(),
       },
-      { status: live.code === "missing_api_key" ? 503 : 422 }
+      { status: 422 }
     );
   }
 
   const sections = partitionLivePlaces(live.places);
   return NextResponse.json({
     ...live,
+    providerLabel: placesProviderLabel(provider),
     sections: {
       nearbyStores: sections.nearby,
       bestLocalOptions: sections.bestLocal,

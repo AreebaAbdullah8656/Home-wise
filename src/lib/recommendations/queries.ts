@@ -8,7 +8,10 @@ import {
   fetchNearbyLivePlaces,
   fetchTextSearchLivePlaces,
 } from "@/lib/places/service";
-import { isGooglePlacesConfigured, missingPlacesMessage } from "@/lib/places/config";
+import {
+  getPlacesProvider,
+  placesProviderLabel,
+} from "@/lib/places/config";
 import type { LivePlace, LivePlacesResponse } from "@/lib/places/types";
 
 export type SavedRecommendationRow =
@@ -113,7 +116,6 @@ export type BillPlaceMatch = {
  * Returns real places only — never sample product prices.
  */
 export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => {
-  if (!isGooglePlacesConfigured()) return [];
   const location = await getProfileLocation();
   if (!location) return [];
 
@@ -153,14 +155,10 @@ export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => 
 });
 
 export async function getInitialLivePlaces(): Promise<LivePlacesResponse> {
-  if (!isGooglePlacesConfigured()) {
-    return {
-      ok: false,
-      code: "missing_api_key",
-      message: missingPlacesMessage(),
-      lastVerifiedAt: new Date().toISOString(),
-    };
-  }
   const location = await getProfileLocation();
   return fetchNearbyLivePlaces({ address: location });
+}
+
+export function getActivePlacesProviderLabel() {
+  return placesProviderLabel(getPlacesProvider());
 }

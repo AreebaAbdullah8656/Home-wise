@@ -16,7 +16,6 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSessionUser } from "@/lib/supabase/server";
 import { getBills } from "@/lib/finance/bills";
-import { isGooglePlacesConfigured } from "@/lib/places/config";
 import {
   getBillPlaceMatches,
   getDismissedRecommendationKeys,
@@ -58,13 +57,12 @@ async function BillsContent() {
     );
   }
 
-  const placesConfigured = isGooglePlacesConfigured();
   const [bills, savedRecKeys, dismissedRecKeys, billMatches] =
     await Promise.all([
       getBills(),
       getSavedRecommendationKeys(),
       getDismissedRecommendationKeys(),
-      placesConfigured ? getBillPlaceMatches() : Promise.resolve([]),
+      getBillPlaceMatches(),
     ]);
 
   return (
@@ -89,7 +87,7 @@ async function BillsContent() {
           savedRecKeys={[...savedRecKeys]}
           dismissedRecKeys={[...dismissedRecKeys]}
           billMatches={billMatches}
-          placesConfigured={placesConfigured}
+          placesConfigured
         />
       </CardContent>
     </Card>

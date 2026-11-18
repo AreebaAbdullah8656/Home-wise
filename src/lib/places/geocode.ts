@@ -1,96 +1,14 @@
-import {
-  getGoogleMapsApiKey,
-  isGooglePlacesConfigured,
-  missingPlacesMessage,
-} from "@/lib/places/config";
-import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
-import type { LatLng } from "@/lib/places/types";
+import { getPlacesProvider } from "@/lib/places/config";
+import { geocodeWithGoogle } from "@/lib/places/geocode-google";
+import { geocodeWithNominatim } from "@/lib/places/osm-nominatim";
+import type { GeocodeResult } from "@/lib/places/osm-nominatim";
 
-type GeocodeOk = {
-  ok: true;
-  location: LatLng;
-  formattedAddress: string;
-  cached: boolean;
-};
+export type { GeocodeResult };
 
-type GeocodeErr = {
-  ok: false;
-  message: string;
-};
-
-export type GeocodeResult = GeocodeOk | GeocodeErr;
-
+/** Geocode via active provider (OSM Nominatim default, Google when key set). */
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
-  const trimmed = address.trim();
-  if (!trimmed) {
-    return { ok: false, message: "Location text is empty." };
+  if (getPlacesProvider() === "google") {
+    return geocodeWithGoogle(address);
   }
-  if (!isGooglePlacesConfigured()) {
-    return { ok: false, message: missingPlacesMessage() };
-  }
-
-  const key = cacheKeyGeocode(trimmed);
-  const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(`geo:${key}`);
-  if (cached) {
-    return { ok: true, ...cached.value, cached: true };
-  }
-
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", trimmed);
-  url.searchParams.set("key", getGoogleMapsApiKey());
-
-  let response: Response;
-  try {
-    response = await fetch(url.toString(), {
-      method: "GET",
-      cache: "no-store",
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      message:
-        error instanceof Error
-          ? `Geocoding request failed: ${error.message}`
-          : "Geocoding request failed.",
-    };
-  }
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      message: `Geocoding HTTP ${response.status}. Check Geocoding API is enabled for your key.`,
-    };
-  }
-
-  const data = (await response.json()) as {
-    status: string;
-    error_message?: string;
-    results?: Array<{
-      formatted_address?: string;
-      geometry?: { location?: { lat?: number; lng?: number } };
-    }>;
-  };
-
-  if (data.status !== "OK" || !data.results?.length) {
-    return {
-      ok: false,
-      message:
-        data.error_message ||
-        `Could not geocode “${trimmed}” (${data.status}). Update Settings → Location with a clearer city or area.`,
-    };
-  }
-
-  const first = data.results[0];
-  const lat = first.geometry?.location?.lat;
-  const lng = first.geometry?.location?.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") {
-    return { ok: false, message: "Geocoding returned no coordinates." };
-  }
-
-  const value = {
-    location: { latitude: lat, longitude: lng },
-    formattedAddress: first.formatted_address ?? trimmed,
-  };
-  cacheSet(`geo:${key}`, value);
-  return { ok: true, ...value, cached: false };
+  return geocodeWithNominatim(address);
 }
