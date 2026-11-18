@@ -15,6 +15,7 @@ import type {
   PlaceRecommendationPayload,
   SavedRecommendationRow,
 } from "@/lib/recommendations/queries";
+import { hasUsablePlaceName } from "@/lib/places/maps-search";
 import { partitionLivePlaces } from "@/lib/places/partition";
 
 const initial: ActionState = {};
@@ -129,10 +130,18 @@ export function DiscoveryPanel({
   const savedSet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
 
-  const filterDismissed = useCallback(
-    (list: LivePlace[]) => list.filter((p) => !dismissedSet.has(`place:${p.placeId}`)),
+  const filterPlaces = useCallback(
+    (list: LivePlace[]) =>
+      list.filter(
+        (p) =>
+          hasUsablePlaceName(p.name) &&
+          !dismissedSet.has(`place:${p.placeId}`)
+      ),
     [dismissedSet]
   );
+
+  const mapsFallbackCity =
+    (live && live.ok ? live.locationLabel : null) || profileLocation || null;
 
   const loadLive = useCallback(
     async (opts: {
@@ -223,26 +232,28 @@ export function DiscoveryPanel({
     if (!sections) return [] as LivePlace[];
     switch (section) {
       case "nearby":
-        return filterDismissed(sections.nearbyStores);
+        return filterPlaces(sections.nearbyStores);
       case "best":
-        return filterDismissed(sections.bestLocalOptions);
+        return filterPlaces(sections.bestLocalOptions);
       case "free":
-        return filterDismissed(sections.freeHomeDelivery);
+        return filterPlaces(sections.freeHomeDelivery);
       case "online":
-        return filterDismissed(sections.verifiedOnlineStores);
+        return filterPlaces(sections.verifiedOnlineStores);
       case "price":
-        return filterDismissed(sections.lowestAvailablePrice);
+        return filterPlaces(sections.lowestAvailablePrice);
       default:
         return [];
     }
-  }, [section, sections, filterDismissed]);
+  }, [section, sections, filterPlaces]);
 
   const filteredBillMatches = useMemo(
     () =>
       billMatches.map((m) => ({
         ...m,
         places: m.places.filter(
-          (p) => !dismissedSet.has(`place:${p.placeId}`)
+          (p) =>
+            hasUsablePlaceName(p.name) &&
+            !dismissedSet.has(`place:${p.placeId}`)
         ),
       })),
     [billMatches, dismissedSet]
@@ -254,8 +265,8 @@ export function DiscoveryPanel({
         <p className="font-medium">Live data · {activeProviderLabel}</p>
         <p className="mt-1">
           External redirect assistant — no cart, checkout, or payments. Shop
-          name, type, address, and map links only. Prices and free delivery are
-          never invented.
+          cards show name and type; open Google Maps to find the store. Prices
+          and delivery claims are never invented.
         </p>
         {providerHint ? (
           <p className="mt-1 text-xs text-muted-foreground">{providerHint}</p>
@@ -394,6 +405,7 @@ export function DiscoveryPanel({
                         kind="bill_place_match"
                         billItemId={match.billItemId}
                         billItemName={match.billItemName}
+                        fallbackCity={mapsFallbackCity}
                       />
                     ))}
                   </ul>
@@ -453,9 +465,17 @@ export function DiscoveryPanel({
                     </li>
                   );
                 }
+                if (!hasUsablePlaceName(place.name)) {
+                  return null;
+                }
                 return (
                   <li key={row.id} className="space-y-2">
-                    <PlaceCard place={place} signedIn={signedIn} saved />
+                    <PlaceCard
+                      place={place}
+                      signedIn={signedIn}
+                      saved
+                      fallbackCity={mapsFallbackCity}
+                    />
                     <form action={removeAction}>
                       <input type="hidden" name="id" value={row.id} />
                       <Button
@@ -521,6 +541,7 @@ export function DiscoveryPanel({
                   place={place}
                   signedIn={signedIn}
                   saved={savedSet.has(`place:${place.placeId}`)}
+                  fallbackCity={mapsFallbackCity}
                 />
               ))}
             </ul>
