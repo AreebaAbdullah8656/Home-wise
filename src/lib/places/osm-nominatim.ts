@@ -1,6 +1,6 @@
 import {
   getNominatimUrl,
-  getNominatimUserAgent,
+  getOsmUserAgent,
   NOMINATIM_CACHE_TTL_MS,
 } from "@/lib/places/config";
 import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
@@ -58,7 +58,7 @@ export async function geocodeWithNominatim(
         method: "GET",
         headers: {
           Accept: "application/json",
-          "User-Agent": getNominatimUserAgent(),
+          "User-Agent": getOsmUserAgent(),
         },
         cache: "no-store",
       });

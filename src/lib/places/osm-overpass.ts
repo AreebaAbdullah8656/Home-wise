@@ -1,4 +1,8 @@
-import { getOverpassUrl, PLACES_CACHE_TTL_MS } from "@/lib/places/config";
+import {
+  getOsmUserAgent,
+  getOverpassEndpoints,
+  PLACES_CACHE_TTL_MS,
+} from "@/lib/places/config";
 import {
   cacheGet,
   cacheKeyNearby,
@@ -34,6 +38,12 @@ const SHOP_VALUES = [
   "stationery",
   "gift",
 ].join("|");
+
+/** Retry these statuses on the next Overpass mirror. */
+const MIRROR_RETRY_STATUSES = new Set([406, 429, 503, 504]);
+
+/** Per-endpoint fetch budget (ms) — avoids hanging on a slow mirror. */
+const OVERPASS_FETCH_TIMEOUT_MS = 28_000;
 
 type OverpassElement = {
   type: "node" | "way" | "relation";
@@ -126,43 +136,108 @@ function normalizeElement(
   };
 }
 
-async function runOverpass(
+function statusMessage(status: number, endpoint: string): string {
+  if (status === 406) {
+    return `Overpass HTTP 406 from ${endpoint} (Not Acceptable — usually missing/rejected User-Agent or Accept).`;
+  }
+  if (status === 429 || status === 503 || status === 504) {
+    return `Overpass HTTP ${status} from ${endpoint}. The server may be busy — try again shortly.`;
+  }
+  return `Overpass HTTP ${status} from ${endpoint}.`;
+}
+
+async function postOverpass(
+  endpoint: string,
   query: string
-): Promise<{ ok: true; elements: OverpassElement[] } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; elements: OverpassElement[]; endpoint: string }
+  | { ok: false; status: number; message: string; endpoint: string }
+> {
   let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OVERPASS_FETCH_TIMEOUT_MS);
   try {
-    response = await fetch(getOverpassUrl(), {
+    response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json, */*",
+        "User-Agent": getOsmUserAgent(),
       },
       body: `data=${encodeURIComponent(query)}`,
       cache: "no-store",
+      signal: controller.signal,
     });
   } catch (error) {
+    const aborted =
+      (error instanceof Error && error.name === "AbortError") ||
+      controller.signal.aborted;
     return {
       ok: false,
-      message:
-        error instanceof Error
-          ? `Overpass request failed: ${error.message}`
-          : "Overpass request failed.",
+      status: 0,
+      endpoint,
+      message: aborted
+        ? `Overpass request timed out (${endpoint}).`
+        : error instanceof Error
+          ? `Overpass request failed (${endpoint}): ${error.message}`
+          : `Overpass request failed (${endpoint}).`,
     };
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {
     return {
       ok: false,
-      message: `Overpass HTTP ${response.status}. The public Overpass server may be busy — try again shortly.`,
+      status: response.status,
+      endpoint,
+      message: statusMessage(response.status, endpoint),
     };
   }
 
   try {
     const data = (await response.json()) as { elements?: OverpassElement[] };
-    return { ok: true, elements: data.elements ?? [] };
+    return {
+      ok: true,
+      elements: data.elements ?? [],
+      endpoint,
+    };
   } catch {
-    return { ok: false, message: "Overpass returned non-JSON." };
+    return {
+      ok: false,
+      status: response.status,
+      endpoint,
+      message: `Overpass returned non-JSON from ${endpoint}.`,
+    };
   }
+}
+
+/**
+ * POST Overpass with identifying User-Agent.
+ * On 406/429/503/504 or timeout/network failure, try configured mirrors.
+ */
+async function runOverpass(
+  query: string
+): Promise<{ ok: true; elements: OverpassElement[] } | { ok: false; message: string }> {
+  const endpoints = getOverpassEndpoints();
+  const attempts: string[] = [];
+
+  for (const endpoint of endpoints) {
+    const result = await postOverpass(endpoint, query);
+    if (result.ok) {
+      return { ok: true, elements: result.elements };
+    }
+    attempts.push(result.message);
+    if (result.status !== 0 && !MIRROR_RETRY_STATUSES.has(result.status)) {
+      // Non-retryable HTTP (e.g. 400 query error) — stop early
+      return { ok: false, message: result.message };
+    }
+  }
+
+  return {
+    ok: false,
+    message: attempts.join(" → "),
+  };
 }
 
 function nearbyQuery(center: LatLng, radiusMeters: number): string {
@@ -188,7 +263,6 @@ function textQuery(
 ): string {
   const { latitude: lat, longitude: lon } = center;
   const r = Math.min(Math.max(Math.round(radiusMeters), 100), 15000);
-  // Escape Overpass regex special chars lightly
   const safe = nameFragment
     .replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
     .trim()

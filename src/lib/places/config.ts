@@ -57,21 +57,41 @@ export const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_NEARBY_RADIUS_M = 5000;
 
 /**
- * Nominatim requires a valid identifying User-Agent.
- * Override with NOMINATIM_USER_AGENT in .env.local if you have a contact URL/email.
+ * OSM/Nominatim/Overpass identifying User-Agent (required — missing UA → Overpass 406).
+ * Override with NOMINATIM_USER_AGENT in .env.local if you have a contact email/URL.
  */
-export function getNominatimUserAgent(): string {
+export function getOsmUserAgent(): string {
   return (
     process.env.NOMINATIM_USER_AGENT?.trim() ||
-    "HomeWise/1.0 (household budget companion; server-side; https://github.com/local/homewise)"
+    process.env.OVERPASS_USER_AGENT?.trim() ||
+    "HomeWise/1.0 (household-budget-app; contact: homewise-dev@example.com)"
   );
 }
 
+/** @deprecated Use getOsmUserAgent — same identifying string for Nominatim + Overpass. */
+export function getNominatimUserAgent(): string {
+  return getOsmUserAgent();
+}
+
+export const OVERPASS_DEFAULT_URL =
+  "https://overpass-api.de/api/interpreter";
+
+export const OVERPASS_MIRROR_URLS = [
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+] as const;
+
 export function getOverpassUrl(): string {
-  return (
-    process.env.OVERPASS_API_URL?.trim() ||
-    "https://overpass-api.de/api/interpreter"
+  return process.env.OVERPASS_API_URL?.trim() || OVERPASS_DEFAULT_URL;
+}
+
+/** Primary + mirrors (primary first; env override still tried first). */
+export function getOverpassEndpoints(): string[] {
+  const primary = getOverpassUrl();
+  const rest = [OVERPASS_DEFAULT_URL, ...OVERPASS_MIRROR_URLS].filter(
+    (url) => url !== primary
   );
+  return [primary, ...rest];
 }
 
 export function getNominatimUrl(): string {
