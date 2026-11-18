@@ -20,7 +20,7 @@ Synced with product intent in root `SPEC.md` (2026-11-18).
 | §8 Home inventory + add to grocery | **done** | |
 | §9 Reports weekly/monthly; never auto-open | **done** | Opened only via nav / quick action |
 | §10 Smart Saving Tips catalog + bookmarks | **done** | |
-| §10 AI personalized tips | **done** | Aggregates only; weekly cache; refresh limit; curated fallback |
+| §10 AI personalized tips | **done** | Aggregates only; weekly cache when stale; first visit uses Refresh tips (no SSR Gemini block); curated fallback |
 | §11 Smart Recommendations / affordable alternatives | **partial** | Live nearby OSM (+ optional Google); Online Stores = search links only (no prices/deals claims) |
 | §12 Tips categories (grocery…shopping) | **done** | |
 | §13 Reports never auto-open | **done** | |
@@ -30,7 +30,7 @@ Synced with product intent in root `SPEC.md` (2026-11-18).
 | §17 Settings profile / currency PKR / optional location | **done** | |
 | §17 Notification / privacy preference panels | **partial** | Placeholder copy only |
 | §17 Currency used everywhere in UI | **partial** | Saved on profile; many formatters still default PKR |
-| §18 Testing & quality | **partial** | tsc/lint/build green; manual smoke documented; no automated E2E suite |
+| §18 Testing & quality | **partial** | tsc/lint/build green; interactive Playwright smoke pass (`scripts/phase10-smoke.mjs`); not wired into CI |
 | §19 README / .env.example / .gitignore / no secrets | **done** | Phase 10 polish |
 | §20 Phased delivery | **done** | Phases 1–10 delivered via incremental branches |
 

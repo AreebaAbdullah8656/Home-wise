@@ -278,7 +278,17 @@ export const getAiSavingTipsForPage = cache(
       return status;
     }
 
-    // Auto weekly refresh (or first-time generate) — once when stale/empty.
+    // First visit (empty cache): do not block SSR on Gemini — curated tips
+    // render immediately; user taps Refresh tips for personalized AI tips.
+    if (!status.tips.length) {
+      return emptyStatus(
+        isGeminiConfigured()
+          ? "Tap Refresh tips for personalized AI tips (uses your spending patterns)."
+          : "GEMINI_API_KEY is not set — showing curated tips only."
+      );
+    }
+
+    // Weekly auto-refresh when cache exists but is stale.
     return generateAndStore({
       userId,
       bumpRefresh: false,

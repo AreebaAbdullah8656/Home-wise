@@ -14,9 +14,10 @@ export const DEFAULT_GEMINI_MODELS = [
 /** @deprecated Prefer getGeminiModels(); kept as first-model alias. */
 export const DEFAULT_GEMINI_MODEL = DEFAULT_GEMINI_MODELS[0];
 
-export const GEMINI_ATTEMPT_TIMEOUT_MS = 45_000;
+/** Per-attempt cap — keep short so fallback models are reached quickly. */
+export const GEMINI_ATTEMPT_TIMEOUT_MS = 20_000;
 /** Retries after the first attempt, per model (total attempts = 1 + this). */
-export const GEMINI_MAX_RETRIES_PER_MODEL = 2;
+export const GEMINI_MAX_RETRIES_PER_MODEL = 1;
 
 export function getGeminiApiKey(): string {
   return process.env.GEMINI_API_KEY?.trim() ?? "";

@@ -62,21 +62,39 @@ export function getGeminiErrorStatus(error: unknown): number | null {
   return null;
 }
 
+function geminiErrorMessage(error: unknown): string {
+  return String(
+    error && typeof error === "object" && "message" in error
+      ? (error as { message?: string }).message
+      : error ?? ""
+  );
+}
+
+/**
+ * Daily / hard per-model quota — retrying the same model is useless.
+ * Caller should fall through to the next model immediately.
+ */
+export function isGeminiModelQuotaExhausted(error: unknown): boolean {
+  const msg = geminiErrorMessage(error);
+  return /GenerateRequestsPerDay|requests per day limit exceeded|Quota exceeded for metric:.*generate_content_free_tier|limit: 20, model:/i.test(
+    msg
+  );
+}
+
 /** True for capacity / rate-limit / timeout — safe to retry or fall back. */
 export function isRetryableGeminiError(error: unknown): boolean {
   if (error && typeof error === "object") {
     const name = String((error as { name?: string }).name ?? "");
     if (name === "AbortError" || name === "TimeoutError") return true;
   }
+  // Daily quota is "retryable" only in the sense of trying another model —
+  // not for sleeping and hitting the same model again.
+  if (isGeminiModelQuotaExhausted(error)) return true;
   const status = getGeminiErrorStatus(error);
   if (status === 429 || status === 503 || status === 500 || status === 504) {
     return true;
   }
-  const msg = String(
-    error && typeof error === "object" && "message" in error
-      ? (error as { message?: string }).message
-      : error
-  );
+  const msg = geminiErrorMessage(error);
   return /503|429|high demand|Service Unavailable|RESOURCE_EXHAUSTED|UNAVAILABLE|timeout|ETIMEDOUT|AbortError|timed out/i.test(
     msg
   );

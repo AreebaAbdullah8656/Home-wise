@@ -103,6 +103,13 @@ Manual smoke (signed-in):
 6. Open Reports only from nav (never auto)  
 7. Tips (curated + AI if Gemini configured); Recommendations (set area); Settings  
 
+Optional Playwright harness (dev server on `:3000`, uses disposable Mailinator signup):
+
+```bash
+npx playwright install chromium
+node scripts/phase10-smoke.mjs
+``` 
+
 ## Known limitations
 
 - **OSM coverage** varies by area; Overpass mirrors may time out — the app falls back to Nominatim nearby search.  

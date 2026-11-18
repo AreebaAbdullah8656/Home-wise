@@ -9,6 +9,7 @@ import {
 } from "@/lib/gemini/config";
 import {
   formatGeminiError,
+  isGeminiModelQuotaExhausted,
   isRetryableGeminiError,
 } from "@/lib/gemini/errors";
 
@@ -123,9 +124,10 @@ export async function generateContentResilient(
       } catch (error) {
         lastError = error;
         const durationMs = Date.now() - started;
+        const quotaExhausted = isGeminiModelQuotaExhausted(error);
         const retryable = isRetryableGeminiError(error);
         console.warn(
-          `[HomeWise ${scope}] model=${modelName} durationMs=${durationMs} ok=false attempt=${attempts} retryable=${retryable} error=${formatGeminiError(error, modelName)}`
+          `[HomeWise ${scope}] model=${modelName} durationMs=${durationMs} ok=false attempt=${attempts} retryable=${retryable} quotaExhausted=${quotaExhausted} error=${formatGeminiError(error, modelName)}`
         );
 
         if (!retryable) {
@@ -133,6 +135,11 @@ export async function generateContentResilient(
             new Error(formatGeminiError(error, modelName)),
             { cause: error, model: modelName, modelsTried, attempts }
           );
+        }
+
+        // Daily/hard quota: skip remaining retries on this model.
+        if (quotaExhausted) {
+          break;
         }
 
         if (retry < GEMINI_MAX_RETRIES_PER_MODEL) {
