@@ -47,14 +47,18 @@ export function missingPlacesMessage(): string {
   );
 }
 
-/** Nearby / Overpass / Places result cache TTL. */
+/** Nearby / Overpass / Places result cache TTL (short). */
 export const PLACES_CACHE_TTL_MS = 10 * 60 * 1000;
 
-/** Nominatim geocode cache — longer to respect usage policy. */
+/** Nominatim geocode + OSM category nearby cache — 24h. */
 export const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Default search radius in meters (3 km). Overpass uses around: only — never city/bbox. */
-export const DEFAULT_NEARBY_RADIUS_M = 3000;
+/** Default search radius in meters (2 km). Overpass max is 5 km. */
+export const DEFAULT_NEARBY_RADIUS_M = 2000;
+
+/** Friendly message when nearby shops cannot be loaded. */
+export const NEARBY_SHOPS_UNAVAILABLE_MESSAGE =
+  "Nearby shops could not be loaded right now. Try again in a minute.";
 
 /**
  * Contact email embedded in Nominatim/Overpass User-Agent (usage policy).

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, useActionState } from "react";
 import {
-  clearSearchLocation,
   removeSavedRecommendation,
   saveSearchLocation,
   type ActionState,
@@ -25,15 +24,18 @@ import type {
 import { hasUsablePlaceName } from "@/lib/places/maps-search";
 import { buildOnlineStoreLinks } from "@/lib/places/online-stores";
 import {
+  DEFAULT_RADIUS_KM,
   normalizeRadiusKm,
   RADIUS_KM_OPTIONS,
   type RadiusKm,
 } from "@/lib/places/distance";
 import { assertInPakistan } from "@/lib/places/pakistan";
 
+const NEARBY_UNAVAILABLE =
+  "Nearby shops could not be loaded right now. Try again in a minute.";
+
 const initial: ActionState = {};
 const STORAGE_KEY = "homewise:search-location-v1";
-const ACCURACY_WARN_M = 2000;
 
 type SectionId = "nearby" | "online" | "from-bills" | "saved";
 
@@ -120,17 +122,9 @@ function readLocalSaved(): SavedCenter | null {
   }
 }
 
-function writeLocalSaved(center: SavedCenter | null) {
+function writeLocalSaved(center: SavedCenter) {
   if (typeof window === "undefined") return;
-  if (!center) {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return;
-  }
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(center));
-}
-
-function coordsLabel(lat: number, lng: number) {
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
 export function DiscoveryPanel({
@@ -147,9 +141,9 @@ export function DiscoveryPanel({
 }: DiscoveryPanelProps) {
   const [section, setSection] = useState<SectionId>("nearby");
   const [query, setQuery] = useState("");
-  const [radiusKm, setRadiusKm] = useState<RadiusKm>(3);
-  const [areaQuery, setAreaQuery] = useState(profileLocation.label ?? "");
-  const [resolvedArea, setResolvedArea] = useState<SavedCenter | null>(() => {
+  const [radiusKm, setRadiusKm] = useState<RadiusKm>(DEFAULT_RADIUS_KM);
+  const [areaText, setAreaText] = useState(profileLocation.label ?? "");
+  const [activeCenter, setActiveCenter] = useState<SavedCenter | null>(() => {
     if (
       profileLocation.latitude != null &&
       profileLocation.longitude != null
@@ -162,16 +156,11 @@ export function DiscoveryPanel({
     }
     return null;
   });
-  const [activeCenter, setActiveCenter] = useState<SavedCenter | null>(
-    resolvedArea
-  );
   const [locationSource, setLocationSource] = useState<LocationSource | null>(
-    resolvedArea ? "saved" : null
+    activeCenter ? "saved" : null
   );
-  const [deviceAccuracyM, setDeviceAccuracyM] = useState<number | null>(null);
-  const [geoNote, setGeoNote] = useState<string | null>(null);
-  const [areaBusy, setAreaBusy] = useState(false);
-  const [areaError, setAreaError] = useState<string | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [live, setLive] = useState<LiveApiOk | LiveApiErr | null>(() => {
     if (!initialLive.ok) return initialLive;
     return {
@@ -200,14 +189,6 @@ export function DiscoveryPanel({
     removeSavedRecommendation,
     initial
   );
-  const [saveLocState, saveLocAction, saveLocPending] = useActionState(
-    saveSearchLocation,
-    initial
-  );
-  const [clearLocState, clearLocAction, clearLocPending] = useActionState(
-    clearSearchLocation,
-    initial
-  );
 
   const savedSet = useMemo(() => new Set(savedKeys), [savedKeys]);
   const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
@@ -231,6 +212,23 @@ export function DiscoveryPanel({
   const onlineLinks = useMemo(
     () => buildOnlineStoreLinks(query.trim() || "household essentials"),
     [query]
+  );
+
+  const persistCenter = useCallback(
+    async (center: SavedCenter) => {
+      writeLocalSaved(center);
+      if (!signedIn) return;
+      try {
+        await saveSearchLocation({
+          label: center.label,
+          latitude: center.latitude,
+          longitude: center.longitude,
+        });
+      } catch {
+        // Non-blocking — localStorage still holds the area.
+      }
+    },
+    [signedIn]
   );
 
   const loadLive = useCallback(
@@ -263,15 +261,17 @@ export function DiscoveryPanel({
         const data = (await res.json()) as LiveApiOk | LiveApiErr;
         setLive(data);
         if (data.ok) {
-          setActiveCenter({
+          const next: SavedCenter = {
             latitude: data.center.latitude,
             longitude: data.center.longitude,
             label:
               data.locationLabel ||
               opts.label ||
-              coordsLabel(data.center.latitude, data.center.longitude),
-          });
+              `${data.center.latitude.toFixed(5)}, ${data.center.longitude.toFixed(5)}`,
+          };
+          setActiveCenter(next);
           setLocationSource(data.locationSource);
+          if (data.locationLabel) setAreaText(data.locationLabel);
         }
       } catch (error) {
         setLive({
@@ -279,7 +279,7 @@ export function DiscoveryPanel({
           message:
             error instanceof Error
               ? error.message
-              : "Failed to refresh live recommendations.",
+              : NEARBY_UNAVAILABLE,
           lastVerifiedAt: new Date().toISOString(),
           provider,
         });
@@ -290,10 +290,8 @@ export function DiscoveryPanel({
     [provider, radiusKm]
   );
 
-  // Boot: (a) saved point → (b) browser geolocation → (c) Settings city
+  // Boot from saved profile / localStorage, else Settings text.
   useEffect(() => {
-    let cancelled = false;
-
     const profileSaved: SavedCenter | null =
       profileLocation.latitude != null && profileLocation.longitude != null
         ? {
@@ -302,15 +300,12 @@ export function DiscoveryPanel({
             label: profileLocation.label ?? "Saved area",
           }
         : null;
-    const localSaved = readLocalSaved();
-    const savedPoint = profileSaved ?? localSaved;
+    const savedPoint = profileSaved ?? readLocalSaved();
 
     if (savedPoint) {
-      setResolvedArea(savedPoint);
       setActiveCenter(savedPoint);
+      setAreaText(savedPoint.label);
       setLocationSource("saved");
-      setAreaQuery(savedPoint.label);
-      setGeoNote("Using your saved area.");
       void loadLive({
         lat: savedPoint.latitude,
         lng: savedPoint.longitude,
@@ -321,93 +316,25 @@ export function DiscoveryPanel({
       return;
     }
 
-    if (!navigator.geolocation) {
-      setGeoNote(
-        profileLocation.label
-          ? "Device geolocation unavailable — using Settings location."
-          : "Device geolocation unavailable and no Settings location set."
-      );
+    if (profileLocation.label) {
+      setAreaText(profileLocation.label);
       void loadLive({
-        address: profileLocation.label ?? undefined,
+        address: profileLocation.label,
         source: "profile",
         refresh: true,
       });
-      return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        const next = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          label: "Device location",
-        };
-        const inPk = assertInPakistan(next);
-        const accuracy =
-          typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-        setDeviceAccuracyM(accuracy);
-        if (!inPk.ok) {
-          setGeoNote(inPk.message);
-          void loadLive({
-            address: profileLocation.label ?? undefined,
-            source: "profile",
-            refresh: true,
-          });
-          return;
-        }
-        setActiveCenter(next);
-        setLocationSource("device");
-        const accuracyNote =
-          accuracy != null
-            ? ` Device accuracy ±${Math.round(accuracy)} m.`
-            : "";
-        if (accuracy != null && accuracy > ACCURACY_WARN_M) {
-          setGeoNote(
-            `Your device location is approximate. Pick your area on the map or enter your area name.${accuracyNote}`
-          );
-        } else {
-          setGeoNote(`Using live device location.${accuracyNote}`);
-        }
-        void loadLive({
-          lat: next.latitude,
-          lng: next.longitude,
-          label: next.label,
-          source: "device",
-          refresh: true,
-        });
-      },
-      () => {
-        if (cancelled) return;
-        setGeoNote(
-          profileLocation.label
-            ? "Location permission declined — using Settings location."
-            : "Location permission declined and no Settings location set."
-        );
-        void loadLive({
-          address: profileLocation.label ?? undefined,
-          source: "profile",
-          refresh: true,
-        });
-      },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 }
-    );
-
-    return () => {
-      cancelled = true;
-    };
-    // Intentionally once on mount for location bootstrap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resolveArea = useCallback(async () => {
-    const q = areaQuery.trim();
+  const setArea = useCallback(async () => {
+    const q = areaText.trim();
     if (!q) {
-      setAreaError("Enter an area or town name in Pakistan.");
+      setLocationError("Enter your area (for example Wapda Town, Gujranwala).");
       return;
     }
-    setAreaBusy(true);
-    setAreaError(null);
+    setLocationBusy(true);
+    setLocationError(null);
     try {
       const res = await fetch(
         `/api/recommendations/geocode?q=${encodeURIComponent(q)}`,
@@ -419,9 +346,9 @@ export function DiscoveryPanel({
             location: { latitude: number; longitude: number };
             formattedAddress: string;
           }
-        | { ok: false; message: string; httpStatus?: number };
+        | { ok: false; message: string };
       if (!data.ok) {
-        setAreaError(data.message);
+        setLocationError(data.message);
         return;
       }
       const next: SavedCenter = {
@@ -429,105 +356,82 @@ export function DiscoveryPanel({
         longitude: data.location.longitude,
         label: data.formattedAddress,
       };
-      setResolvedArea(next);
       setActiveCenter(next);
-      setLocationSource("query");
-      setGeoNote("Resolved area ready — save it to reuse next time.");
-      void loadLive({
+      setAreaText(next.label);
+      setLocationSource("saved");
+      await persistCenter(next);
+      await loadLive({
         lat: next.latitude,
         lng: next.longitude,
         label: next.label,
-        source: "query",
+        source: "saved",
         refresh: true,
         q: query || undefined,
       });
     } catch (error) {
-      setAreaError(
-        error instanceof Error ? error.message : "Area lookup failed."
+      setLocationError(
+        error instanceof Error ? error.message : "Could not set that area."
       );
     } finally {
-      setAreaBusy(false);
+      setLocationBusy(false);
     }
-  }, [areaQuery, loadLive, query]);
+  }, [areaText, loadLive, persistCenter, query]);
 
   const useDeviceLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setAreaError("Device geolocation is unavailable in this browser.");
+      setLocationError("Device location is not available in this browser.");
       return;
     }
-    setAreaBusy(true);
-    setAreaError(null);
+    setLocationBusy(true);
+    setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const next = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          label: "Device location",
-        };
-        const inPk = assertInPakistan(next);
-        const accuracy =
-          typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
-        setDeviceAccuracyM(accuracy);
-        setAreaBusy(false);
-        if (!inPk.ok) {
-          setAreaError(inPk.message);
-          return;
-        }
-        setResolvedArea(next);
-        setActiveCenter(next);
-        setLocationSource("device");
-        setAreaQuery(next.label);
-        if (accuracy != null && accuracy > ACCURACY_WARN_M) {
-          setGeoNote(
-            `Your device location is approximate. Pick your area on the map or enter your area name. (±${Math.round(accuracy)} m)`
-          );
-        } else {
-          setGeoNote(
-            accuracy != null
-              ? `Using live device location (±${Math.round(accuracy)} m).`
-              : "Using live device location."
-          );
-        }
-        void loadLive({
-          lat: next.latitude,
-          lng: next.longitude,
-          label: next.label,
-          source: "device",
-          refresh: true,
-          q: query || undefined,
-        });
+        void (async () => {
+          const next: SavedCenter = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            label: "Device location",
+          };
+          const inPk = assertInPakistan(next);
+          if (!inPk.ok) {
+            setLocationError(inPk.message);
+            setLocationBusy(false);
+            return;
+          }
+          setActiveCenter(next);
+          setAreaText(next.label);
+          setLocationSource("device");
+          await persistCenter(next);
+          await loadLive({
+            lat: next.latitude,
+            lng: next.longitude,
+            label: next.label,
+            source: "device",
+            refresh: true,
+            q: query || undefined,
+          });
+          setLocationBusy(false);
+        })();
       },
-      (err) => {
-        setAreaBusy(false);
-        setAreaError(err.message || "Could not read device location.");
+      () => {
+        setLocationBusy(false);
+        setLocationError(
+          "Could not use device location. Keep your typed area, or try again."
+        );
       },
-      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 60_000 }
     );
-  }, [loadLive, query]);
+  }, [loadLive, persistCenter, query]);
 
-  const confirmSaveArea = useCallback(() => {
-    if (!resolvedArea) return;
-    writeLocalSaved(resolvedArea);
-    setActiveCenter(resolvedArea);
-    setLocationSource("saved");
-    setGeoNote("Saved area for this browser.");
-  }, [resolvedArea]);
+  const placeName =
+    activeCenter?.label ||
+    (live && live.ok ? live.locationLabel : null) ||
+    areaText.trim() ||
+    null;
 
-  const resetLocation = useCallback(() => {
-    writeLocalSaved(null);
-    setResolvedArea(null);
-    setActiveCenter(null);
-    setLocationSource(null);
-    setDeviceAccuracyM(null);
-    setGeoNote("Location reset. Pick an area or use device location.");
-  }, []);
-
-  const activeProviderLabel =
-    live && "provider" in live && live.provider
-      ? live.provider === "google"
-        ? "Google Places"
-        : "OpenStreetMap"
-      : providerLabel;
+  const searchContext = placeName
+    ? `Searching within ${radiusKm} km of ${placeName}`
+    : null;
 
   const nearbyList = useMemo(() => {
     if (!live || !live.ok) return [] as LivePlace[];
@@ -547,213 +451,119 @@ export function DiscoveryPanel({
     [billMatches, dismissedSet]
   );
 
-  const searchContext =
-    activeCenter != null
-      ? `Searching within ${radiusKm} km of ${activeCenter.label || "selected point"} (${coordsLabel(activeCenter.latitude, activeCenter.longitude)})`
-      : live && live.ok
-        ? `Searching within ${normalizeRadiusKm((live.radiusKm ?? live.radiusMeters / 1000) as number)} km of ${live.locationLabel || "resolved point"} (${coordsLabel(live.center.latitude, live.center.longitude)})`
-        : null;
+  const activeProviderLabel =
+    live && "provider" in live && live.provider
+      ? live.provider === "google"
+        ? "Google Places"
+        : "OpenStreetMap"
+      : providerLabel;
+
+  const retryNearby = () => {
+    void loadLive({
+      ...(activeCenter
+        ? {
+            lat: activeCenter.latitude,
+            lng: activeCenter.longitude,
+            label: activeCenter.label,
+            source: locationSource ?? "saved",
+          }
+        : {
+            address: areaText.trim() || profileLocation.label || undefined,
+            source: "profile",
+          }),
+      refresh: true,
+      q: query || undefined,
+    });
+  };
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm text-accent-foreground">
         <p className="font-medium">Live data · {activeProviderLabel}</p>
         <p className="mt-1">
-          Pakistan radius search — shop cards show name, type, and distance.
-          Open Google Maps to find the store. Prices and delivery claims are
-          never invented.
+          Nearby shops within a small radius of your area. Cards show name,
+          type, and distance — open Maps to find the store.
         </p>
         {providerHint ? (
           <p className="mt-1 text-xs text-muted-foreground">{providerHint}</p>
-        ) : null}
-        <p className="mt-2 text-xs">
-          {geoNote || "Resolving location…"}
-          {profileLocation.label
-            ? ` · Settings location: ${profileLocation.label}`
-            : ""}
-          {deviceAccuracyM != null
-            ? ` · Accuracy ±${Math.round(deviceAccuracyM)} m`
-            : ""}
-          {live && live.ok
-            ? ` · Last verified ${new Date(live.lastVerifiedAt).toLocaleString()}${
-                live.cached ? " (short cache)" : ""
-              }`
-            : ""}
-        </p>
-        {searchContext ? (
-          <p className="mt-2 text-xs font-medium text-foreground">
-            {searchContext}
-          </p>
         ) : null}
       </div>
 
       <div className="space-y-3 rounded-xl border border-border bg-card p-4">
         <div className="space-y-1">
-          <Label htmlFor="area_search">Exact area (Pakistan)</Label>
+          <Label htmlFor="your_area">Your area</Label>
           <Input
-            id="area_search"
-            value={areaQuery}
-            onChange={(e) => setAreaQuery(e.target.value)}
-            placeholder='e.g. "Wapda Town, Gujranwala"'
-            disabled={areaBusy || loading}
+            id="your_area"
+            value={areaText}
+            onChange={(e) => setAreaText(e.target.value)}
+            placeholder="Wapda Town, Gujranwala"
+            disabled={locationBusy || loading}
           />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             size="sm"
-            disabled={areaBusy || loading || !areaQuery.trim()}
-            onClick={() => void resolveArea()}
+            disabled={locationBusy || loading || !areaText.trim()}
+            onClick={() => void setArea()}
           >
-            {areaBusy ? "Looking up…" : "Find area"}
+            {locationBusy ? "Setting…" : "Set area"}
           </Button>
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            disabled={areaBusy || loading}
+            disabled={locationBusy || loading}
             onClick={useDeviceLocation}
           >
             Use my device location
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={!resolvedArea || areaBusy}
-            onClick={confirmSaveArea}
-          >
-            Confirm for this browser
-          </Button>
-          {signedIn && resolvedArea ? (
-            <form action={saveLocAction}>
-              <input
-                type="hidden"
-                name="location_label"
-                value={resolvedArea.label}
-              />
-              <input
-                type="hidden"
-                name="location_lat"
-                value={String(resolvedArea.latitude)}
-              />
-              <input
-                type="hidden"
-                name="location_lng"
-                value={String(resolvedArea.longitude)}
-              />
-              <Button type="submit" size="sm" disabled={saveLocPending}>
-                {saveLocPending ? "Saving…" : "Save to Settings"}
-              </Button>
-            </form>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={areaBusy}
-            onClick={resetLocation}
-          >
-            Reset location
-          </Button>
-          {signedIn ? (
-            <form action={clearLocAction}>
-              <Button
-                type="submit"
-                size="sm"
-                variant="ghost"
-                disabled={clearLocPending}
-              >
-                Clear saved coords
-              </Button>
-            </form>
-          ) : null}
         </div>
-        {resolvedArea ? (
-          <p className="text-xs text-muted-foreground">
-            Resolved: <span className="text-foreground">{resolvedArea.label}</span>{" "}
-            ({coordsLabel(resolvedArea.latitude, resolvedArea.longitude)})
-            {locationSource ? ` · source: ${locationSource}` : ""}
-          </p>
-        ) : null}
-        {areaError ? (
+        {locationError ? (
           <p className="text-sm text-destructive" role="alert">
-            {areaError}
+            {locationError}
           </p>
         ) : null}
-        {saveLocState.success || clearLocState.success ? (
-          <p className="text-sm" role="status">
-            {saveLocState.success || clearLocState.success}
-          </p>
-        ) : null}
-        {saveLocState.error || clearLocState.error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {saveLocState.error || clearLocState.error}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="radius_km">Radius</Label>
-          <select
-            id="radius_km"
-            value={radiusKm}
-            disabled={loading}
-            onChange={(e) => {
-              const next = normalizeRadiusKm(Number(e.target.value));
-              setRadiusKm(next);
-              void loadLive({
-                ...(activeCenter
-                  ? {
-                      lat: activeCenter.latitude,
-                      lng: activeCenter.longitude,
-                      label: activeCenter.label,
-                      source: locationSource ?? "saved",
-                    }
-                  : {
-                      address: profileLocation.label ?? undefined,
-                      source: "profile",
-                    }),
-                radius: next,
-                refresh: true,
-                q: query || undefined,
-              });
-            }}
-            className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {RADIUS_KM_OPTIONS.map((km) => (
-              <option key={km} value={km}>
-                {km} km
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {searchContext ? (
+            <p className="text-sm text-foreground">{searchContext}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Set your area to search nearby shops.
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <Label htmlFor="radius_km" className="text-xs text-muted-foreground">
+              Radius
+            </Label>
+            <select
+              id="radius_km"
+              value={radiusKm}
+              disabled={loading || !activeCenter}
+              onChange={(e) => {
+                const next = normalizeRadiusKm(Number(e.target.value));
+                setRadiusKm(next);
+                if (!activeCenter) return;
+                void loadLive({
+                  lat: activeCenter.latitude,
+                  lng: activeCenter.longitude,
+                  label: activeCenter.label,
+                  source: locationSource ?? "saved",
+                  radius: next,
+                  refresh: true,
+                  q: query || undefined,
+                });
+              }}
+              className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {RADIUS_KM_OPTIONS.map((km) => (
+                <option key={km} value={km}>
+                  {km} km
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={loading}
-          onClick={() =>
-            void loadLive({
-              ...(activeCenter
-                ? {
-                    lat: activeCenter.latitude,
-                    lng: activeCenter.longitude,
-                    label: activeCenter.label,
-                    source: locationSource ?? "saved",
-                  }
-                : {
-                    address: profileLocation.label ?? undefined,
-                    source: "profile",
-                  }),
-              refresh: true,
-              q: query || undefined,
-            })
-          }
-        >
-          {loading ? "Refreshing…" : "Refresh now"}
-        </Button>
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_auto]">
@@ -763,14 +573,14 @@ export function DiscoveryPanel({
             id="live_search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Pharmacy, supermarket, detergent store…"
+            placeholder="Pharmacy, supermarket, bakery…"
             disabled={loading}
           />
         </div>
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <Button
             type="button"
-            disabled={loading || !query.trim()}
+            disabled={loading || !query.trim() || !activeCenter}
             onClick={() => {
               setSection("nearby");
               void loadLive({
@@ -781,16 +591,21 @@ export function DiscoveryPanel({
                       label: activeCenter.label,
                       source: locationSource ?? "saved",
                     }
-                  : {
-                      address: profileLocation.label ?? undefined,
-                      source: "profile",
-                    }),
+                  : {}),
                 q: query,
                 refresh: true,
               });
             }}
           >
             {loading ? "Searching…" : "Search"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || !activeCenter}
+            onClick={retryNearby}
+          >
+            Retry
           </Button>
         </div>
       </div>
@@ -815,22 +630,18 @@ export function DiscoveryPanel({
 
       {loading ? (
         <p className="text-sm text-muted-foreground" role="status">
-          Loading live results…
+          Loading nearby shops…
         </p>
       ) : null}
 
-      {live && !live.ok ? (
+      {live && !live.ok && section === "nearby" ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">No live results</p>
-          {live.httpStatus != null ? (
-            <p className="mt-2 font-mono text-xs text-foreground">
-              HTTP {live.httpStatus}
-              {live.code ? ` · ${live.code}` : ""}
-            </p>
-          ) : live.code ? (
-            <p className="mt-2 font-mono text-xs text-foreground">{live.code}</p>
-          ) : null}
-          <p className="mt-2">{live.message}</p>
+          <p className="font-medium text-foreground">{live.message}</p>
+          <div className="mt-4 flex justify-center">
+            <Button type="button" size="sm" disabled={loading} onClick={retryNearby}>
+              Retry
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -956,9 +767,7 @@ export function DiscoveryPanel({
                     </li>
                   );
                 }
-                if (!hasUsablePlaceName(place.name)) {
-                  return null;
-                }
+                if (!hasUsablePlaceName(place.name)) return null;
                 return (
                   <li key={row.id} className="space-y-2">
                     <PlaceCard
@@ -989,10 +798,8 @@ export function DiscoveryPanel({
       {section === "nearby" && live?.ok ? (
         <div className="space-y-3">
           <h2 className="font-heading text-xl">Nearby Stores</h2>
-          {query.trim() ? (
-            <p className="text-sm text-muted-foreground">
-              Also see Online Stores for “{query.trim()}”.
-            </p>
+          {live.cached ? (
+            <p className="text-xs text-muted-foreground">Showing cached results.</p>
           ) : null}
           {nearbyList.length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">

@@ -180,19 +180,20 @@ export async function removeSavedRecommendation(
   return { success: "Removed from saved." };
 }
 
-/** Persist confirmed area center (Pakistan) on the signed-in profile. */
-export async function saveSearchLocation(
-  _prev: ActionState,
-  formData: FormData
-): Promise<ActionState> {
+/** Auto-save area center (Pakistan) on the signed-in profile. */
+export async function saveSearchLocation(input: {
+  label: string;
+  latitude: number;
+  longitude: number;
+}): Promise<ActionState> {
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const label = String(formData.get("location_label") ?? "").trim();
-  const lat = Number(formData.get("location_lat"));
-  const lng = Number(formData.get("location_lng"));
+  const label = input.label.trim();
+  const lat = input.latitude;
+  const lng = input.longitude;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return { error: "Confirm a place with valid coordinates first." };
+    return { error: "Could not save that location." };
   }
 
   try {
@@ -210,8 +211,15 @@ export async function saveSearchLocation(
       })
       .eq("id", auth.user.id);
     if (error) {
-      logAuthFailure("saveSearchLocation", error);
-      return { error: formatAuthError(error) };
+      // Migration may be missing — try text-only location.
+      const legacy = await supabase
+        .from("profiles")
+        .update({ location: label || null })
+        .eq("id", auth.user.id);
+      if (legacy.error) {
+        logAuthFailure("saveSearchLocation", error);
+        return { error: formatAuthError(error) };
+      }
     }
   } catch (error) {
     logAuthFailure("saveSearchLocation", error);
@@ -220,35 +228,5 @@ export async function saveSearchLocation(
 
   revalidatePath("/recommendations");
   revalidatePath("/settings");
-  return { success: "Area saved to Settings." };
-}
-
-export async function clearSearchLocation(
-  _prev: ActionState,
-  _formData?: FormData
-): Promise<ActionState> {
-  const auth = await requireUser();
-  if ("error" in auth) return { error: auth.error };
-
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        location_lat: null,
-        location_lng: null,
-      })
-      .eq("id", auth.user.id);
-    if (error) {
-      logAuthFailure("clearSearchLocation", error);
-      return { error: formatAuthError(error) };
-    }
-  } catch (error) {
-    logAuthFailure("clearSearchLocation", error);
-    return { error: formatAuthError(error) };
-  }
-
-  revalidatePath("/recommendations");
-  revalidatePath("/settings");
-  return { success: "Saved coordinates cleared. Location text kept." };
+  return { success: "Area saved." };
 }

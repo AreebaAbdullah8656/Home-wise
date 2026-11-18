@@ -1,52 +1,29 @@
 import {
   getOsmUserAgent,
   getOverpassEndpoints,
-  PLACES_CACHE_TTL_MS,
+  NOMINATIM_CACHE_TTL_MS,
 } from "@/lib/places/config";
+import { cacheGet, cacheSet } from "@/lib/places/cache";
+import { clampSearchRadiusMeters, distanceMeters } from "@/lib/places/distance";
+import { searchNearbyWithNominatim } from "@/lib/places/nominatim-nearby";
 import {
-  cacheGet,
-  cacheKeyNearby,
-  cacheKeyText,
-  cacheSet,
-} from "@/lib/places/cache";
-import { distanceMeters } from "@/lib/places/distance";
-import { mapSearchTerm } from "@/lib/places/search-terms";
+  DEFAULT_NEARBY_CATEGORIES,
+  getCategory,
+  resolveSearchCategory,
+  type ShopCategory,
+  type ShopCategoryId,
+} from "@/lib/places/search-terms";
 import type { DeliveryInfo, LatLng, LivePlace } from "@/lib/places/types";
-
-/** OSM shop / amenity values for household discovery. */
-const SHOP_VALUES = [
-  "supermarket",
-  "convenience",
-  "greengrocer",
-  "bakery",
-  "butcher",
-  "chemist",
-  "hardware",
-  "doityourself",
-  "clothes",
-  "fashion",
-  "shoes",
-  "furniture",
-  "electronics",
-  "appliance",
-  "mobile_phone",
-  "houseware",
-  "bathroom_furnishing",
-  "department_store",
-  "variety_store",
-  "general",
-  "wholesale",
-  "laundry",
-  "dry_cleaning",
-  "stationery",
-  "gift",
-].join("|");
 
 /** Retry these statuses on the next Overpass mirror. */
 const MIRROR_RETRY_STATUSES = new Set([406, 429, 503, 504]);
 
-/** Per-endpoint fetch budget (ms) — avoids hanging on a slow mirror. */
-const OVERPASS_FETCH_TIMEOUT_MS = 28_000;
+/** Client timeout per mirror (ms). */
+const OVERPASS_FETCH_TIMEOUT_MS = 30_000;
+
+/** Friendly user-facing message — technical detail stays in server logs. */
+export const NEARBY_UNAVAILABLE_MESSAGE =
+  "Nearby shops could not be loaded right now. Try again in a minute.";
 
 type OverpassElement = {
   type: "node" | "way" | "relation";
@@ -91,6 +68,7 @@ function normalizeElement(
   center: LatLng,
   radiusMeters: number
 ): LivePlace | null {
+  if (el.type === "relation") return null;
   const tags = el.tags ?? {};
   const name = tags.name?.trim() || tags.brand?.trim() || tags.operator?.trim();
   if (!name) return null;
@@ -142,12 +120,12 @@ function normalizeElement(
 
 function statusMessage(status: number, endpoint: string): string {
   if (status === 406) {
-    return `Overpass HTTP 406 from ${endpoint} (Not Acceptable — usually missing/rejected User-Agent or Accept).`;
+    return `Overpass HTTP 406 from ${endpoint}`;
   }
   if (status === 429 || status === 503 || status === 504) {
-    return `Overpass HTTP ${status} from ${endpoint}. The server may be busy — try again shortly.`;
+    return `Overpass HTTP ${status} from ${endpoint}`;
   }
-  return `Overpass HTTP ${status} from ${endpoint}.`;
+  return `Overpass HTTP ${status} from ${endpoint}`;
 }
 
 async function postOverpass(
@@ -181,10 +159,10 @@ async function postOverpass(
       status: 0,
       endpoint,
       message: aborted
-        ? `Overpass request timed out (${endpoint}).`
+        ? `Overpass timed out (${endpoint})`
         : error instanceof Error
-          ? `Overpass request failed (${endpoint}): ${error.message}`
-          : `Overpass request failed (${endpoint}).`,
+          ? `Overpass failed (${endpoint}): ${error.message}`
+          : `Overpass failed (${endpoint})`,
     };
   } finally {
     clearTimeout(timer);
@@ -211,15 +189,11 @@ async function postOverpass(
       ok: false,
       status: response.status,
       endpoint,
-      message: `Overpass returned non-JSON from ${endpoint}.`,
+      message: `Overpass non-JSON from ${endpoint}`,
     };
   }
 }
 
-/**
- * POST Overpass with identifying User-Agent.
- * On 406/429/503/504 or timeout/network failure, try configured mirrors.
- */
 async function runOverpass(
   query: string
 ): Promise<{ ok: true; elements: OverpassElement[] } | { ok: false; message: string }> {
@@ -231,7 +205,9 @@ async function runOverpass(
     if (result.ok) {
       return { ok: true, elements: result.elements };
     }
+    console.warn("[overpass]", result.message);
     attempts.push(result.message);
+    // Timeouts / network (status 0) and retryable HTTP → next mirror
     if (result.status !== 0 && !MIRROR_RETRY_STATUSES.has(result.status)) {
       return { ok: false, message: result.message };
     }
@@ -239,93 +215,60 @@ async function runOverpass(
 
   return {
     ok: false,
-    message: attempts.join(" → "),
+    message: attempts.join(" → ") || "Overpass unavailable",
   };
 }
 
-function clampRadius(radiusMeters: number): number {
-  return Math.min(Math.max(Math.round(radiusMeters), 100), 15_000);
-}
-
-/** Radius-only nearby query — never city or bounding-box fallbacks. */
-function nearbyQuery(center: LatLng, radiusMeters: number): string {
-  const { latitude: lat, longitude: lon } = center;
-  const r = clampRadius(radiusMeters);
-  return `
-[out:json][timeout:25];
-(
-  node["shop"~"^(${SHOP_VALUES})$"](around:${r},${lat},${lon});
-  way["shop"~"^(${SHOP_VALUES})$"](around:${r},${lat},${lon});
-  node["amenity"="pharmacy"](around:${r},${lat},${lon});
-  way["amenity"="pharmacy"](around:${r},${lat},${lon});
-  node["amenity"="marketplace"](around:${r},${lat},${lon});
-);
-out center tags;
-`.trim();
-}
-
-function escapeOverpassRegex(value: string): string {
-  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&").trim().slice(0, 64);
-}
-
-function tagSearchQuery(
+/** One light category query: node+way only, out center 40. */
+function categoryQuery(
   center: LatLng,
   radiusMeters: number,
-  shopValues: string[],
-  amenityValues: string[],
-  nameHint?: string
+  category: ShopCategory
 ): string {
   const { latitude: lat, longitude: lon } = center;
-  const r = clampRadius(radiusMeters);
+  const r = clampSearchRadiusMeters(radiusMeters);
   const parts: string[] = [];
-  if (shopValues.length) {
-    const shopRe = shopValues.map(escapeOverpassRegex).join("|");
+
+  if (category.shop) {
     parts.push(
-      `node["shop"~"^(${shopRe})$"](around:${r},${lat},${lon});`,
-      `way["shop"~"^(${shopRe})$"](around:${r},${lat},${lon});`
+      `node["shop"="${category.shop}"](around:${r},${lat},${lon});`,
+      `way["shop"="${category.shop}"](around:${r},${lat},${lon});`
     );
   }
-  if (amenityValues.length) {
-    const amenityRe = amenityValues.map(escapeOverpassRegex).join("|");
+  if (category.amenity) {
     parts.push(
-      `node["amenity"~"^(${amenityRe})$"](around:${r},${lat},${lon});`,
-      `way["amenity"~"^(${amenityRe})$"](around:${r},${lat},${lon});`
+      `node["amenity"="${category.amenity}"](around:${r},${lat},${lon});`,
+      `way["amenity"="${category.amenity}"](around:${r},${lat},${lon});`
     );
   }
-  if (nameHint) {
-    const safe = escapeOverpassRegex(nameHint);
-    parts.push(
-      `node["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});`,
-      `way["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});`
-    );
-  }
+
   return `
 [out:json][timeout:25];
 (
   ${parts.join("\n  ")}
 );
-out center tags;
+out center 40;
 `.trim();
 }
 
-function textQuery(
+function nameQuery(
   center: LatLng,
   radiusMeters: number,
   nameFragment: string
 ): string {
   const { latitude: lat, longitude: lon } = center;
-  const r = clampRadius(radiusMeters);
-  const safe = escapeOverpassRegex(nameFragment);
+  const r = clampSearchRadiusMeters(radiusMeters);
+  const safe = nameFragment
+    .replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
+    .trim()
+    .slice(0, 48);
   return `
 [out:json][timeout:25];
 (
   node["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});
   way["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});
-  node["name"~"${safe}",i]["amenity"~"^(pharmacy|marketplace)$"](around:${r},${lat},${lon});
-  way["name"~"${safe}",i]["amenity"~"^(pharmacy|marketplace)$"](around:${r},${lat},${lon});
-  node["brand"~"${safe}",i]["shop"](around:${r},${lat},${lon});
 );
-out center tags;
+out center 40;
 `.trim();
 }
 
@@ -349,57 +292,164 @@ function mapElements(
   return out;
 }
 
-export async function searchNearbyOsmStores(
+function categoryCacheKey(
   center: LatLng,
-  radiusMeters: number
-): Promise<{ ok: true; places: LivePlace[] } | { ok: false; message: string }> {
-  const radius = clampRadius(radiusMeters);
-  const key = `osm:${cacheKeyNearby(center.latitude, center.longitude, radius)}`;
-  const cached = cacheGet<LivePlace[]>(key);
-  if (cached) {
-    return { ok: true, places: cached.value };
+  radiusMeters: number,
+  categoryId: string
+) {
+  return `osm-cat:${center.latitude.toFixed(3)}:${center.longitude.toFixed(3)}:${clampSearchRadiusMeters(radiusMeters)}:${categoryId}`;
+}
+
+function mergePlaces(lists: LivePlace[][]): LivePlace[] {
+  const seen = new Set<string>();
+  const out: LivePlace[] = [];
+  for (const list of lists) {
+    for (const place of list) {
+      if (seen.has(place.placeId)) continue;
+      seen.add(place.placeId);
+      out.push(place);
+    }
+  }
+  out.sort(
+    (a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity)
+  );
+  return out;
+}
+
+async function fetchCategory(
+  center: LatLng,
+  radiusMeters: number,
+  category: ShopCategory,
+  bypassCache: boolean
+): Promise<{ places: LivePlace[]; fromCache: boolean; overpassOk: boolean }> {
+  const key = categoryCacheKey(center, radiusMeters, category.id);
+  if (!bypassCache) {
+    const cached = cacheGet<LivePlace[]>(key);
+    if (cached) {
+      return { places: cached.value, fromCache: true, overpassOk: true };
+    }
   }
 
-  const result = await runOverpass(nearbyQuery(center, radius));
-  if (!result.ok) return result;
-  const places = mapElements(result.elements, center, radius);
-  cacheSet(key, places, PLACES_CACHE_TTL_MS);
-  return { ok: true, places };
+  const result = await runOverpass(
+    categoryQuery(center, radiusMeters, category)
+  );
+  if (result.ok) {
+    const places = mapElements(result.elements, center, radiusMeters);
+    cacheSet(key, places, NOMINATIM_CACHE_TTL_MS);
+    return { places, fromCache: false, overpassOk: true };
+  }
+
+  // Prefer stale/fresh cache over hard failure
+  const stale = cacheGet<LivePlace[]>(key);
+  if (stale) {
+    return { places: stale.value, fromCache: true, overpassOk: false };
+  }
+
+  const nominatim = await searchNearbyWithNominatim({
+    center,
+    radiusMeters,
+    term: category.nominatimTerm,
+    categoryKey: category.id,
+  });
+  if (nominatim.ok && nominatim.places.length) {
+    cacheSet(key, nominatim.places, NOMINATIM_CACHE_TTL_MS);
+    return { places: nominatim.places, fromCache: false, overpassOk: false };
+  }
+
+  console.warn(
+    "[overpass] category failed; nominatim empty:",
+    category.id,
+    result.message
+  );
+  return { places: [], fromCache: false, overpassOk: false };
+}
+
+export async function searchNearbyOsmStores(
+  center: LatLng,
+  radiusMeters: number,
+  opts?: { bypassCache?: boolean; categories?: ShopCategoryId[] }
+): Promise<
+  | { ok: true; places: LivePlace[]; cached: boolean }
+  | { ok: false; message: string }
+> {
+  const radius = clampSearchRadiusMeters(radiusMeters);
+  const categoryIds = opts?.categories ?? DEFAULT_NEARBY_CATEGORIES;
+  const bypassCache = opts?.bypassCache === true;
+
+  const results = await Promise.all(
+    categoryIds.map((id) =>
+      fetchCategory(center, radius, getCategory(id), bypassCache)
+    )
+  );
+
+  const places = mergePlaces(results.map((r) => r.places)).slice(0, 40);
+  const anyOk = results.some((r) => r.places.length > 0 || r.overpassOk);
+  const allCached = results.every((r) => r.fromCache);
+
+  if (places.length === 0 && !anyOk) {
+    return { ok: false, message: NEARBY_UNAVAILABLE_MESSAGE };
+  }
+
+  return { ok: true, places, cached: allCached };
 }
 
 export async function searchOsmPlacesByText(
   query: string,
   center: LatLng,
-  radiusMeters: number
-): Promise<{ ok: true; places: LivePlace[] } | { ok: false; message: string }> {
+  radiusMeters: number,
+  opts?: { bypassCache?: boolean }
+): Promise<
+  | { ok: true; places: LivePlace[]; cached: boolean }
+  | { ok: false; message: string }
+> {
   const q = query.trim();
-  if (!q) return { ok: true, places: [] };
+  if (!q) return { ok: true, places: [], cached: false };
 
-  const radius = clampRadius(radiusMeters);
-  const key = `osm:${cacheKeyText(center.latitude, center.longitude, q, radius)}`;
-  const cached = cacheGet<LivePlace[]>(key);
-  if (cached) {
-    return { ok: true, places: cached.value };
+  const radius = clampSearchRadiusMeters(radiusMeters);
+  const bypassCache = opts?.bypassCache === true;
+  const category = resolveSearchCategory(q);
+
+  if (category) {
+    const result = await fetchCategory(center, radius, category, bypassCache);
+    if (result.places.length === 0 && !result.overpassOk && !result.fromCache) {
+      return { ok: false, message: NEARBY_UNAVAILABLE_MESSAGE };
+    }
+    return {
+      ok: true,
+      places: result.places.slice(0, 30),
+      cached: result.fromCache,
+    };
   }
 
-  const mapped = mapSearchTerm(q);
-  const overpassQuery = mapped
-    ? tagSearchQuery(
-        center,
-        radius,
-        mapped.filter.kind === "amenity" ? [] : mapped.filter.kind === "shop"
-          ? mapped.filter.values
-          : mapped.filter.shop,
-        mapped.filter.kind === "shop" ? [] : mapped.filter.kind === "amenity"
-          ? mapped.filter.values
-          : mapped.filter.amenity,
-        mapped.nameHint
-      )
-    : textQuery(center, radius, q);
+  // Free-text name search — light Overpass, then Nominatim
+  const key = categoryCacheKey(center, radius, `name:${q.toLowerCase()}`);
+  if (!bypassCache) {
+    const cached = cacheGet<LivePlace[]>(key);
+    if (cached) return { ok: true, places: cached.value, cached: true };
+  }
 
-  const result = await runOverpass(overpassQuery);
-  if (!result.ok) return result;
-  const places = mapElements(result.elements, center, radius).slice(0, 30);
-  cacheSet(key, places, PLACES_CACHE_TTL_MS);
-  return { ok: true, places };
+  const overpass = await runOverpass(nameQuery(center, radius, q));
+  if (overpass.ok) {
+    const places = mapElements(overpass.elements, center, radius).slice(0, 30);
+    cacheSet(key, places, NOMINATIM_CACHE_TTL_MS);
+    return { ok: true, places, cached: false };
+  }
+
+  console.warn("[overpass] name search failed:", overpass.message);
+  const stale = cacheGet<LivePlace[]>(key);
+  if (stale) return { ok: true, places: stale.value, cached: true };
+
+  const nominatim = await searchNearbyWithNominatim({
+    center,
+    radiusMeters: radius,
+    term: q,
+    categoryKey: `name:${q.toLowerCase()}`,
+  });
+  if (nominatim.ok) {
+    const places = nominatim.places.slice(0, 30);
+    cacheSet(key, places, NOMINATIM_CACHE_TTL_MS);
+    return { ok: true, places, cached: false };
+  }
+
+  return { ok: false, message: NEARBY_UNAVAILABLE_MESSAGE };
 }

@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   const addressOverride = url.searchParams.get("address")?.trim() || "";
   const labelOverride = url.searchParams.get("label")?.trim() || "";
   const radiusKm = normalizeRadiusKm(
-    Number(url.searchParams.get("radiusKm") ?? "3")
+    Number(url.searchParams.get("radiusKm") ?? "2")
   );
   const locationSourceParam = parseLocationSource(
     url.searchParams.get("source")

@@ -88,8 +88,8 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
           }
         />
         <p className="text-xs text-muted-foreground">
-          Optional Pakistan city/area. Confirm exact coords from Smart
-          Recommendations area picker to search nearby shops.
+          Optional Pakistan city/area. Setting your area in Smart
+          Recommendations saves coordinates here automatically.
           {profile.location_lat != null && profile.location_lng != null
             ? ` Saved point: ${profile.location_lat.toFixed(5)}, ${profile.location_lng.toFixed(5)}.`
             : ""}
