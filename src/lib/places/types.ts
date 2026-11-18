@@ -41,6 +41,8 @@ export type LivePlace = {
   mapsUrl: string | null;
   phone: string | null;
   location: LatLng | null;
+  /** Distance from the active search center, when known. */
+  distanceMeters: number | null;
   delivery: DeliveryInfo;
   /** Product prices are never invented — always null from OSM/Places. */
   verifiedProductPrice: null;
@@ -49,12 +51,14 @@ export type LivePlace = {
   lastVerifiedAt: string;
 };
 
+export type LocationSource = "saved" | "device" | "profile" | "query";
+
 export type LivePlacesResult = {
   ok: true;
   places: LivePlace[];
   center: LatLng;
   radiusMeters: number;
-  locationSource: "device" | "profile" | "query";
+  locationSource: LocationSource;
   locationLabel: string | null;
   provider: "osm" | "google";
   lastVerifiedAt: string;

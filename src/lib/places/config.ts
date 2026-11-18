@@ -53,8 +53,8 @@ export const PLACES_CACHE_TTL_MS = 10 * 60 * 1000;
 /** Nominatim geocode cache — longer to respect usage policy. */
 export const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Default search radius in meters. */
-export const DEFAULT_NEARBY_RADIUS_M = 5000;
+/** Default search radius in meters (3 km). Overpass uses around: only — never city/bbox. */
+export const DEFAULT_NEARBY_RADIUS_M = 3000;
 
 /**
  * Contact email embedded in Nominatim/Overpass User-Agent (usage policy).

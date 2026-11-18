@@ -1,5 +1,11 @@
 import { NOMINATIM_CACHE_TTL_MS } from "@/lib/places/config";
 import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
+import {
+  assertInPakistan,
+  outsidePakistanMessage,
+  PAKISTAN_PHOTON_BBOX,
+  withPakistanSuffix,
+} from "@/lib/places/pakistan";
 import type { LatLng } from "@/lib/places/types";
 
 type GeocodeOk = {
@@ -27,6 +33,7 @@ type PhotonFeature = {
     city?: string;
     state?: string;
     country?: string;
+    countrycode?: string;
   };
 };
 
@@ -46,16 +53,23 @@ function formatPhotonAddress(props: PhotonFeature["properties"], fallback: strin
   return props.name?.trim() || fallback;
 }
 
-/** Photon (Komoot) forward geocode — Nominatim fallback. */
+function isPakistanFeature(props: PhotonFeature["properties"] | undefined): boolean {
+  if (!props) return false;
+  const code = props.countrycode?.trim().toLowerCase();
+  if (code === "pk" || code === "pak") return true;
+  return /\bpakistan\b/i.test(props.country ?? "");
+}
+
+/** Photon (Komoot) forward geocode — Nominatim fallback. Pakistan-restricted. */
 export async function geocodeWithPhoton(
   address: string
 ): Promise<PhotonGeocodeResult> {
-  const trimmed = address.trim();
+  const trimmed = withPakistanSuffix(address);
   if (!trimmed) {
     return { ok: false, message: "Location text is empty." };
   }
 
-  const cacheKey = `photon-geo:${cacheKeyGeocode(trimmed)}`;
+  const cacheKey = `photon-geo-pk:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(cacheKey);
   if (cached) {
     return { ok: true, ...cached.value, cached: true };
@@ -63,7 +77,8 @@ export async function geocodeWithPhoton(
 
   const url = new URL("https://photon.komoot.io/api/");
   url.searchParams.set("q", trimmed);
-  url.searchParams.set("limit", "1");
+  url.searchParams.set("limit", "5");
+  url.searchParams.set("bbox", PAKISTAN_PHOTON_BBOX);
 
   let response: Response;
   try {
@@ -91,12 +106,14 @@ export async function geocodeWithPhoton(
   }
 
   const data = (await response.json()) as PhotonResponse;
-  const feature = data.features?.[0];
+  const features = Array.isArray(data.features) ? data.features : [];
+  const feature =
+    features.find((f) => isPakistanFeature(f.properties)) ?? features[0];
   const coords = feature?.geometry?.coordinates;
   if (!feature || !Array.isArray(coords) || coords.length < 2) {
     return {
       ok: false,
-      message: `Could not geocode “${trimmed}” via Photon.`,
+      message: `Could not geocode “${trimmed}” in Pakistan via Photon.`,
     };
   }
 
@@ -106,8 +123,22 @@ export async function geocodeWithPhoton(
     return { ok: false, message: "Photon returned no coordinates." };
   }
 
+  const location = { latitude: lat, longitude: lng };
+  const inPk = assertInPakistan(location);
+  if (!inPk.ok) {
+    return { ok: false, message: inPk.message };
+  }
+  if (feature.properties && !isPakistanFeature(feature.properties)) {
+    // Bbox can still return edge hits; require PK country when tagged.
+    const code = feature.properties.countrycode?.trim();
+    const country = feature.properties.country?.trim();
+    if (code || country) {
+      return { ok: false, message: outsidePakistanMessage() };
+    }
+  }
+
   const payload = {
-    location: { latitude: lat, longitude: lng },
+    location,
     formattedAddress: formatPhotonAddress(feature.properties, trimmed),
   };
   const value = { ...payload, provider: "photon" as const };

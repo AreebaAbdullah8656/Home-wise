@@ -5,6 +5,10 @@ import {
   NOMINATIM_CACHE_TTL_MS,
 } from "@/lib/places/config";
 import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
+import {
+  assertInPakistan,
+  withPakistanSuffix,
+} from "@/lib/places/pakistan";
 import { withNominatimRateLimit } from "@/lib/places/rate-limit";
 import type { LatLng } from "@/lib/places/types";
 
@@ -43,17 +47,18 @@ function nominatimHeaders(): HeadersInit {
 
 /**
  * Nominatim forward geocode — server-side only.
+ * Pakistan-only: countrycodes=pk + ", Pakistan" suffix + bbox reject.
  * Honors identifying User-Agent + Accept-Language, caching, and ~1 req/s.
  */
 export async function geocodeWithNominatim(
   address: string
 ): Promise<GeocodeResult> {
-  const trimmed = address.trim();
+  const trimmed = withPakistanSuffix(address);
   if (!trimmed) {
     return { ok: false, message: "Location text is empty." };
   }
 
-  const cacheKey = `osm-geo:${cacheKeyGeocode(trimmed)}`;
+  const cacheKey = `osm-geo-pk:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<GeocodePayload>(cacheKey);
   if (cached) {
     return {
@@ -65,7 +70,6 @@ export async function geocodeWithNominatim(
   }
 
   return withNominatimRateLimit(async () => {
-    // Re-check cache inside the rate-limit gate (another waiter may have filled it).
     const again = cacheGet<GeocodePayload>(cacheKey);
     if (again) {
       return {
@@ -81,6 +85,7 @@ export async function geocodeWithNominatim(
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", "1");
     url.searchParams.set("addressdetails", "0");
+    url.searchParams.set("countrycodes", "pk");
 
     let response: Response;
     try {
@@ -117,7 +122,7 @@ export async function geocodeWithNominatim(
     if (!Array.isArray(data) || data.length === 0) {
       return {
         ok: false,
-        message: `Could not geocode “${trimmed}” via OpenStreetMap Nominatim. Update Settings → Location with a clearer city or area.`,
+        message: `Could not geocode “${trimmed}” in Pakistan via OpenStreetMap Nominatim. Try a clearer area (e.g. “Wapda Town, Gujranwala”).`,
       };
     }
 
@@ -128,8 +133,14 @@ export async function geocodeWithNominatim(
       return { ok: false, message: "Nominatim returned no coordinates." };
     }
 
+    const location = { latitude: lat, longitude: lng };
+    const inPk = assertInPakistan(location);
+    if (!inPk.ok) {
+      return { ok: false, message: inPk.message };
+    }
+
     const value: GeocodePayload = {
-      location: { latitude: lat, longitude: lng },
+      location,
       formattedAddress: first.display_name?.trim() || trimmed,
     };
     cacheSet(cacheKey, value, NOMINATIM_CACHE_TTL_MS);

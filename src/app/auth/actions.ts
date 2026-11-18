@@ -143,6 +143,15 @@ export async function updateProfile(
     const currency =
       String(formData.get("currency") ?? "PKR").trim().toUpperCase() || "PKR";
     const location = String(formData.get("location") ?? "").trim();
+    const latRaw = String(formData.get("location_lat") ?? "").trim();
+    const lngRaw = String(formData.get("location_lng") ?? "").trim();
+    const lat = latRaw !== "" ? Number(latRaw) : null;
+    const lng = lngRaw !== "" ? Number(lngRaw) : null;
+    const hasCoords =
+      lat != null &&
+      lng != null &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng);
 
     const { error } = await supabase
       .from("profiles")
@@ -150,6 +159,8 @@ export async function updateProfile(
         display_name: displayName || null,
         currency,
         location: location || null,
+        location_lat: hasCoords ? lat : null,
+        location_lng: hasCoords ? lng : null,
       })
       .eq("id", user.id);
 

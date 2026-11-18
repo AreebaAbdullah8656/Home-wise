@@ -91,17 +91,54 @@ export const getSavedRecommendationKeys = cache(async () => {
   return keys;
 });
 
+export type ProfileSearchLocation = {
+  label: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+export const getProfileSearchLocation = cache(
+  async (): Promise<ProfileSearchLocation> => {
+    const userId = await requireUserId();
+    if (!userId) {
+      return { label: null, latitude: null, longitude: null };
+    }
+    const supabase = await createClient();
+    const withCoords = await supabase
+      .from("profiles")
+      .select("location, location_lat, location_lng")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!withCoords.error) {
+      const lat = withCoords.data?.location_lat;
+      const lng = withCoords.data?.location_lng;
+      return {
+        label: withCoords.data?.location?.trim() || null,
+        latitude:
+          typeof lat === "number" && Number.isFinite(lat) ? lat : null,
+        longitude:
+          typeof lng === "number" && Number.isFinite(lng) ? lng : null,
+      };
+    }
+    // Migration not applied yet — fall back to text location only.
+    const legacy = await supabase
+      .from("profiles")
+      .select("location")
+      .eq("id", userId)
+      .maybeSingle();
+    if (legacy.error) throw legacy.error;
+    return {
+      label: legacy.data?.location?.trim() || null,
+      latitude: null,
+      longitude: null,
+    };
+  }
+);
+
+/** @deprecated Prefer getProfileSearchLocation */
 export const getProfileLocation = cache(async () => {
-  const userId = await requireUserId();
-  if (!userId) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("location")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.location?.trim() || null;
+  const loc = await getProfileSearchLocation();
+  return loc.label;
 });
 
 export type BillPlaceMatch = {
@@ -116,8 +153,10 @@ export type BillPlaceMatch = {
  * Returns real places only — never sample product prices.
  */
 export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => {
-  const location = await getProfileLocation();
-  if (!location) return [];
+  const location = await getProfileSearchLocation();
+  if (!location.label && (location.latitude == null || location.longitude == null)) {
+    return [];
+  }
 
   const bills = await getBills();
   const items = bills
@@ -133,7 +172,14 @@ export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => 
   for (const item of items) {
     const live = await fetchTextSearchLivePlaces({
       query: item.name,
-      address: location,
+      address: location.label,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      locationSource:
+        location.latitude != null && location.longitude != null
+          ? "saved"
+          : "profile",
+      locationLabel: location.label,
     });
     if (!live.ok) {
       matches.push({
@@ -155,8 +201,17 @@ export const getBillPlaceMatches = cache(async (): Promise<BillPlaceMatch[]> => 
 });
 
 export async function getInitialLivePlaces(): Promise<LivePlacesResponse> {
-  const location = await getProfileLocation();
-  return fetchNearbyLivePlaces({ address: location });
+  const location = await getProfileSearchLocation();
+  return fetchNearbyLivePlaces({
+    address: location.label,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    locationSource:
+      location.latitude != null && location.longitude != null
+        ? "saved"
+        : "profile",
+    locationLabel: location.label,
+  });
 }
 
 export function getActivePlacesProviderLabel() {

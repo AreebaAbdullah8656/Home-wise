@@ -9,6 +9,8 @@ import {
   cacheKeyText,
   cacheSet,
 } from "@/lib/places/cache";
+import { distanceMeters } from "@/lib/places/distance";
+import { mapSearchTerm } from "@/lib/places/search-terms";
 import type { DeliveryInfo, LatLng, LivePlace } from "@/lib/places/types";
 
 /** OSM shop / amenity values for household discovery. */
@@ -27,6 +29,7 @@ const SHOP_VALUES = [
   "furniture",
   "electronics",
   "appliance",
+  "mobile_phone",
   "houseware",
   "bathroom_furnishing",
   "department_store",
@@ -84,7 +87,9 @@ function primaryTypeFromTags(tags: Record<string, string>): string | null {
 
 function normalizeElement(
   el: OverpassElement,
-  verifiedAt: Date
+  verifiedAt: Date,
+  center: LatLng,
+  radiusMeters: number
 ): LivePlace | null {
   const tags = el.tags ?? {};
   const name = tags.name?.trim() || tags.brand?.trim() || tags.operator?.trim();
@@ -92,16 +97,14 @@ function normalizeElement(
 
   const lat = el.lat ?? el.center?.lat;
   const lon = el.lon ?? el.center?.lon;
-  const location: LatLng | null =
-    typeof lat === "number" && typeof lon === "number"
-      ? { latitude: lat, longitude: lon }
-      : null;
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+
+  const location: LatLng = { latitude: lat, longitude: lon };
+  const dist = distanceMeters(center, location);
+  if (dist > radiusMeters) return null;
 
   const placeId = `osm:${el.type}/${el.id}`;
-  const mapsUrl =
-    location != null
-      ? `https://www.openstreetmap.org/${el.type}/${el.id}#map=18/${location.latitude}/${location.longitude}`
-      : `https://www.openstreetmap.org/${el.type}/${el.id}`;
+  const mapsUrl = `https://www.openstreetmap.org/${el.type}/${el.id}#map=18/${location.latitude}/${location.longitude}`;
 
   const website =
     tags.website?.trim() ||
@@ -128,6 +131,7 @@ function normalizeElement(
     mapsUrl,
     phone,
     location,
+    distanceMeters: Math.round(dist),
     delivery: unavailableDelivery(),
     verifiedProductPrice: null,
     source: "OpenStreetMap",
@@ -229,7 +233,6 @@ async function runOverpass(
     }
     attempts.push(result.message);
     if (result.status !== 0 && !MIRROR_RETRY_STATUSES.has(result.status)) {
-      // Non-retryable HTTP (e.g. 400 query error) — stop early
       return { ok: false, message: result.message };
     }
   }
@@ -240,9 +243,14 @@ async function runOverpass(
   };
 }
 
+function clampRadius(radiusMeters: number): number {
+  return Math.min(Math.max(Math.round(radiusMeters), 100), 15_000);
+}
+
+/** Radius-only nearby query — never city or bounding-box fallbacks. */
 function nearbyQuery(center: LatLng, radiusMeters: number): string {
   const { latitude: lat, longitude: lon } = center;
-  const r = Math.min(Math.max(Math.round(radiusMeters), 100), 15000);
+  const r = clampRadius(radiusMeters);
   return `
 [out:json][timeout:25];
 (
@@ -256,17 +264,58 @@ out center tags;
 `.trim();
 }
 
+function escapeOverpassRegex(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&").trim().slice(0, 64);
+}
+
+function tagSearchQuery(
+  center: LatLng,
+  radiusMeters: number,
+  shopValues: string[],
+  amenityValues: string[],
+  nameHint?: string
+): string {
+  const { latitude: lat, longitude: lon } = center;
+  const r = clampRadius(radiusMeters);
+  const parts: string[] = [];
+  if (shopValues.length) {
+    const shopRe = shopValues.map(escapeOverpassRegex).join("|");
+    parts.push(
+      `node["shop"~"^(${shopRe})$"](around:${r},${lat},${lon});`,
+      `way["shop"~"^(${shopRe})$"](around:${r},${lat},${lon});`
+    );
+  }
+  if (amenityValues.length) {
+    const amenityRe = amenityValues.map(escapeOverpassRegex).join("|");
+    parts.push(
+      `node["amenity"~"^(${amenityRe})$"](around:${r},${lat},${lon});`,
+      `way["amenity"~"^(${amenityRe})$"](around:${r},${lat},${lon});`
+    );
+  }
+  if (nameHint) {
+    const safe = escapeOverpassRegex(nameHint);
+    parts.push(
+      `node["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});`,
+      `way["name"~"${safe}",i]["shop"](around:${r},${lat},${lon});`
+    );
+  }
+  return `
+[out:json][timeout:25];
+(
+  ${parts.join("\n  ")}
+);
+out center tags;
+`.trim();
+}
+
 function textQuery(
   center: LatLng,
   radiusMeters: number,
   nameFragment: string
 ): string {
   const { latitude: lat, longitude: lon } = center;
-  const r = Math.min(Math.max(Math.round(radiusMeters), 100), 15000);
-  const safe = nameFragment
-    .replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
-    .trim()
-    .slice(0, 64);
+  const r = clampRadius(radiusMeters);
+  const safe = escapeOverpassRegex(nameFragment);
   return `
 [out:json][timeout:25];
 (
@@ -280,16 +329,23 @@ out center tags;
 `.trim();
 }
 
-function mapElements(elements: OverpassElement[]): LivePlace[] {
+function mapElements(
+  elements: OverpassElement[],
+  center: LatLng,
+  radiusMeters: number
+): LivePlace[] {
   const verifiedAt = new Date();
   const seen = new Set<string>();
   const out: LivePlace[] = [];
   for (const el of elements) {
-    const place = normalizeElement(el, verifiedAt);
+    const place = normalizeElement(el, verifiedAt, center, radiusMeters);
     if (!place || seen.has(place.placeId)) continue;
     seen.add(place.placeId);
     out.push(place);
   }
+  out.sort(
+    (a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity)
+  );
   return out;
 }
 
@@ -297,15 +353,16 @@ export async function searchNearbyOsmStores(
   center: LatLng,
   radiusMeters: number
 ): Promise<{ ok: true; places: LivePlace[] } | { ok: false; message: string }> {
-  const key = `osm:${cacheKeyNearby(center.latitude, center.longitude, radiusMeters)}`;
+  const radius = clampRadius(radiusMeters);
+  const key = `osm:${cacheKeyNearby(center.latitude, center.longitude, radius)}`;
   const cached = cacheGet<LivePlace[]>(key);
   if (cached) {
     return { ok: true, places: cached.value };
   }
 
-  const result = await runOverpass(nearbyQuery(center, radiusMeters));
+  const result = await runOverpass(nearbyQuery(center, radius));
   if (!result.ok) return result;
-  const places = mapElements(result.elements);
+  const places = mapElements(result.elements, center, radius);
   cacheSet(key, places, PLACES_CACHE_TTL_MS);
   return { ok: true, places };
 }
@@ -318,15 +375,31 @@ export async function searchOsmPlacesByText(
   const q = query.trim();
   if (!q) return { ok: true, places: [] };
 
-  const key = `osm:${cacheKeyText(center.latitude, center.longitude, q, radiusMeters)}`;
+  const radius = clampRadius(radiusMeters);
+  const key = `osm:${cacheKeyText(center.latitude, center.longitude, q, radius)}`;
   const cached = cacheGet<LivePlace[]>(key);
   if (cached) {
     return { ok: true, places: cached.value };
   }
 
-  const result = await runOverpass(textQuery(center, radiusMeters, q));
+  const mapped = mapSearchTerm(q);
+  const overpassQuery = mapped
+    ? tagSearchQuery(
+        center,
+        radius,
+        mapped.filter.kind === "amenity" ? [] : mapped.filter.kind === "shop"
+          ? mapped.filter.values
+          : mapped.filter.shop,
+        mapped.filter.kind === "shop" ? [] : mapped.filter.kind === "amenity"
+          ? mapped.filter.values
+          : mapped.filter.amenity,
+        mapped.nameHint
+      )
+    : textQuery(center, radius, q);
+
+  const result = await runOverpass(overpassQuery);
   if (!result.ok) return result;
-  const places = mapElements(result.elements).slice(0, 30);
+  const places = mapElements(result.elements, center, radius).slice(0, 30);
   cacheSet(key, places, PLACES_CACHE_TTL_MS);
   return { ok: true, places };
 }

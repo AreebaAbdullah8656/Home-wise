@@ -1,5 +1,9 @@
 import { NOMINATIM_CACHE_TTL_MS } from "@/lib/places/config";
 import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
+import {
+  assertInPakistan,
+  withPakistanSuffix,
+} from "@/lib/places/pakistan";
 import type { LatLng } from "@/lib/places/types";
 
 type GeocodeOk = {
@@ -24,6 +28,7 @@ type OpenMeteoResult = {
   longitude?: number;
   admin1?: string;
   country?: string;
+  country_code?: string;
 };
 
 type OpenMeteoResponse = {
@@ -37,28 +42,28 @@ function formatOpenMeteoAddress(row: OpenMeteoResult, fallback: string) {
   return parts.length ? parts.join(", ") : fallback;
 }
 
-/** Open-Meteo geocoding API — Nominatim / Photon fallback. */
+/** Open-Meteo geocoding API — Nominatim / Photon fallback. Pakistan-only. */
 export async function geocodeWithOpenMeteo(
   address: string
 ): Promise<OpenMeteoGeocodeResult> {
-  const trimmed = address.trim();
+  const trimmed = withPakistanSuffix(address);
   if (!trimmed) {
     return { ok: false, message: "Location text is empty." };
   }
 
-  const cacheKey = `open-meteo-geo:${cacheKeyGeocode(trimmed)}`;
+  const cacheKey = `open-meteo-geo-pk:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(cacheKey);
   if (cached) {
     return { ok: true, ...cached.value, cached: true };
   }
 
-  // Open-Meteo matches place names best when given the primary locality.
   const nameHint = trimmed.split(",")[0]?.trim() || trimmed;
   const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
   url.searchParams.set("name", nameHint);
-  url.searchParams.set("count", "1");
+  url.searchParams.set("count", "5");
   url.searchParams.set("language", "en");
   url.searchParams.set("format", "json");
+  url.searchParams.set("countryCode", "PK");
 
   let response: Response;
   try {
@@ -86,7 +91,9 @@ export async function geocodeWithOpenMeteo(
   }
 
   const data = (await response.json()) as OpenMeteoResponse;
-  const first = data.results?.[0];
+  const rows = Array.isArray(data.results) ? data.results : [];
+  const first =
+    rows.find((r) => (r.country_code ?? "").toUpperCase() === "PK") ?? rows[0];
   const lat = first?.latitude;
   const lng = first?.longitude;
   if (
@@ -98,12 +105,18 @@ export async function geocodeWithOpenMeteo(
   ) {
     return {
       ok: false,
-      message: `Could not geocode “${trimmed}” via Open-Meteo.`,
+      message: `Could not geocode “${trimmed}” in Pakistan via Open-Meteo.`,
     };
   }
 
+  const location = { latitude: lat, longitude: lng };
+  const inPk = assertInPakistan(location);
+  if (!inPk.ok) {
+    return { ok: false, message: inPk.message };
+  }
+
   const payload = {
-    location: { latitude: lat, longitude: lng },
+    location,
     formattedAddress: formatOpenMeteoAddress(first, trimmed),
   };
   const value = { ...payload, provider: "open-meteo" as const };

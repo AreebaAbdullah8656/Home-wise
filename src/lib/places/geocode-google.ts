@@ -3,6 +3,10 @@ import {
   isGooglePlacesConfigured,
 } from "@/lib/places/config";
 import { cacheGet, cacheKeyGeocode, cacheSet } from "@/lib/places/cache";
+import {
+  assertInPakistan,
+  withPakistanSuffix,
+} from "@/lib/places/pakistan";
 import type { LatLng } from "@/lib/places/types";
 
 type GeocodeOk = {
@@ -24,7 +28,7 @@ export type GeocodeResult = GeocodeOk | GeocodeErr;
 export async function geocodeWithGoogle(
   address: string
 ): Promise<GeocodeResult> {
-  const trimmed = address.trim();
+  const trimmed = withPakistanSuffix(address);
   if (!trimmed) {
     return { ok: false, message: "Location text is empty." };
   }
@@ -35,19 +39,19 @@ export async function geocodeWithGoogle(
     };
   }
 
-  const key = `google-geo:${cacheKeyGeocode(trimmed)}`;
+  const key = `google-geo-pk:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<Omit<GeocodeOk, "ok" | "cached">>(key);
   if (cached) {
     return {
       ok: true,
       ...cached.value,
       cached: true,
-      provider: "google",
     };
   }
 
   const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
   url.searchParams.set("address", trimmed);
+  url.searchParams.set("components", "country:PK");
   url.searchParams.set("key", getGoogleMapsApiKey());
 
   let response: Response;
@@ -88,7 +92,7 @@ export async function geocodeWithGoogle(
       ok: false,
       message:
         data.error_message ||
-        `Could not geocode “${trimmed}” (${data.status}). Update Settings → Location with a clearer city or area.`,
+        `Could not geocode “${trimmed}” in Pakistan (${data.status}). Update Settings → Location with a clearer city or area.`,
     };
   }
 
@@ -99,10 +103,17 @@ export async function geocodeWithGoogle(
     return { ok: false, message: "Geocoding returned no coordinates." };
   }
 
+  const location = { latitude: lat, longitude: lng };
+  const inPk = assertInPakistan(location);
+  if (!inPk.ok) {
+    return { ok: false, message: inPk.message };
+  }
+
   const value = {
-    location: { latitude: lat, longitude: lng },
+    location,
     formattedAddress: first.formatted_address ?? trimmed,
+    provider: "google" as const,
   };
   cacheSet(key, value);
-  return { ok: true, ...value, cached: false, provider: "google" };
+  return { ok: true, ...value, cached: false };
 }

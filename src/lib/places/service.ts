@@ -10,16 +10,19 @@ import {
   cacheKeyText,
   cacheSet,
 } from "@/lib/places/cache";
+import { distanceMeters } from "@/lib/places/distance";
 import { geocodeAddress } from "@/lib/places/geocode";
 import { searchNearbyStores, searchPlacesByText } from "@/lib/places/client";
 import {
   searchNearbyOsmStores,
   searchOsmPlacesByText,
 } from "@/lib/places/osm-overpass";
+import { assertInPakistan } from "@/lib/places/pakistan";
 import type {
   LatLng,
   LivePlace,
   LivePlacesResponse,
+  LocationSource,
 } from "@/lib/places/types";
 import { partitionLivePlaces } from "@/lib/places/partition";
 
@@ -39,7 +42,7 @@ function validateCoords(lat: number, lng: number): boolean {
 type ResolveOk = {
   ok: true;
   center: LatLng;
-  locationSource: "device" | "profile" | "query";
+  locationSource: LocationSource;
   locationLabel: string | null;
 };
 
@@ -54,21 +57,61 @@ type ResolveErr = {
   httpStatus?: number;
 };
 
+function withDistances(
+  places: LivePlace[],
+  center: LatLng,
+  radiusMeters: number
+): LivePlace[] {
+  const out: LivePlace[] = [];
+  for (const place of places) {
+    if (!place.location) continue;
+    const dist =
+      place.distanceMeters ??
+      Math.round(distanceMeters(center, place.location));
+    if (dist > radiusMeters) continue;
+    out.push({ ...place, distanceMeters: dist });
+  }
+  out.sort(
+    (a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity)
+  );
+  return out;
+}
+
 export async function resolveCenter(input: {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
+  locationSource?: LocationSource | null;
+  locationLabel?: string | null;
 }): Promise<ResolveOk | ResolveErr> {
   if (
     input.latitude != null &&
     input.longitude != null &&
     validateCoords(input.latitude, input.longitude)
   ) {
+    const center = {
+      latitude: input.latitude,
+      longitude: input.longitude,
+    };
+    const inPk = assertInPakistan(center);
+    if (!inPk.ok) {
+      return {
+        ok: false,
+        errorCode: "invalid_coordinates",
+        message: inPk.message,
+      };
+    }
+    const source: LocationSource =
+      input.locationSource === "saved" ||
+      input.locationSource === "device" ||
+      input.locationSource === "query"
+        ? input.locationSource
+        : "device";
     return {
       ok: true,
-      center: { latitude: input.latitude, longitude: input.longitude },
-      locationSource: "device",
-      locationLabel: null,
+      center,
+      locationSource: source,
+      locationLabel: input.locationLabel?.trim() || null,
     };
   }
 
@@ -90,7 +133,7 @@ export async function resolveCenter(input: {
       ok: false,
       errorCode: "missing_location",
       message:
-        "No location available. Allow device location or set an optional city/area in Settings, then reload.",
+        "No location available. Pick your area on the map, allow device location, or set a city/area in Settings.",
     };
   }
 
@@ -107,7 +150,7 @@ export async function resolveCenter(input: {
   return {
     ok: true,
     center: geo.location,
-    locationSource: "profile",
+    locationSource: input.locationSource === "query" ? "query" : "profile",
     locationLabel: geo.formattedAddress,
   };
 }
@@ -122,6 +165,8 @@ export async function fetchNearbyLivePlaces(input: {
   address?: string | null;
   radiusMeters?: number;
   bypassCache?: boolean;
+  locationSource?: LocationSource | null;
+  locationLabel?: string | null;
 }): Promise<LivePlacesResponse> {
   const now = new Date().toISOString();
   const provider = getPlacesProvider();
@@ -177,10 +222,11 @@ export async function fetchNearbyLivePlaces(input: {
     };
   }
 
-  const { verifiedAt, expiresAt } = cacheSet(key, result.places);
+  const places = withDistances(result.places, resolved.center, radius);
+  const { verifiedAt, expiresAt } = cacheSet(key, places);
   return {
     ok: true,
-    places: result.places,
+    places,
     center: resolved.center,
     radiusMeters: radius,
     locationSource: resolved.locationSource,
@@ -199,6 +245,8 @@ export async function fetchTextSearchLivePlaces(input: {
   address?: string | null;
   radiusMeters?: number;
   bypassCache?: boolean;
+  locationSource?: LocationSource | null;
+  locationLabel?: string | null;
 }): Promise<LivePlacesResponse> {
   const now = new Date().toISOString();
   const provider = getPlacesProvider();
@@ -266,10 +314,11 @@ export async function fetchTextSearchLivePlaces(input: {
     };
   }
 
-  const { verifiedAt, expiresAt } = cacheSet(key, result.places);
+  const places = withDistances(result.places, resolved.center, radius);
+  const { verifiedAt, expiresAt } = cacheSet(key, places);
   return {
     ok: true,
-    places: result.places,
+    places,
     center: resolved.center,
     radiusMeters: radius,
     locationSource: resolved.locationSource,

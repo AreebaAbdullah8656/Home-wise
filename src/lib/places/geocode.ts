@@ -7,6 +7,10 @@ import { geocodeWithGoogle } from "@/lib/places/geocode-google";
 import { geocodeWithOpenMeteo } from "@/lib/places/geocode-open-meteo";
 import { geocodeWithPhoton } from "@/lib/places/geocode-photon";
 import { geocodeWithNominatim } from "@/lib/places/osm-nominatim";
+import {
+  assertInPakistan,
+  withPakistanSuffix,
+} from "@/lib/places/pakistan";
 import type { LatLng } from "@/lib/places/types";
 
 export type GeocodeProvider =
@@ -47,13 +51,24 @@ function shouldUseFallback(result: {
   );
 }
 
+function finalizeOk(
+  payload: GeocodePayload,
+  cached: boolean
+): GeocodeResult {
+  const inPk = assertInPakistan(payload.location);
+  if (!inPk.ok) {
+    return { ok: false, message: inPk.message };
+  }
+  return { ok: true, ...payload, cached };
+}
+
 /**
- * Geocode via active provider.
+ * Geocode via active provider (Pakistan-only).
  * OSM path: Nominatim (UA + rate limit + cache) → Photon → Open-Meteo on 403/429.
- * Prefer passing device lat/lng so this is skipped entirely.
+ * Prefer passing device/saved lat/lng so this is skipped entirely.
  */
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
-  const trimmed = address.trim();
+  const trimmed = withPakistanSuffix(address);
   if (!trimmed) {
     return { ok: false, message: "Location text is empty." };
   }
@@ -62,10 +77,10 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
     return geocodeWithGoogle(trimmed);
   }
 
-  const sharedKey = `geo:${cacheKeyGeocode(trimmed)}`;
+  const sharedKey = `geo-pk:${cacheKeyGeocode(trimmed)}`;
   const cached = cacheGet<GeocodePayload>(sharedKey);
   if (cached) {
-    return { ok: true, ...cached.value, cached: true };
+    return finalizeOk(cached.value, true);
   }
 
   const nominatim = await geocodeWithNominatim(trimmed);
@@ -75,8 +90,9 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
       formattedAddress: nominatim.formattedAddress,
       provider: "nominatim",
     };
-    cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
-    return { ok: true, ...payload, cached: nominatim.cached };
+    const final = finalizeOk(payload, nominatim.cached);
+    if (final.ok) cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
+    return final;
   }
 
   if (!shouldUseFallback(nominatim)) {
@@ -90,8 +106,9 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
       formattedAddress: photon.formattedAddress,
       provider: "photon",
     };
-    cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
-    return { ok: true, ...payload, cached: photon.cached };
+    const final = finalizeOk(payload, photon.cached);
+    if (final.ok) cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
+    return final;
   }
 
   const openMeteo = await geocodeWithOpenMeteo(trimmed);
@@ -101,8 +118,9 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
       formattedAddress: openMeteo.formattedAddress,
       provider: "open-meteo",
     };
-    cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
-    return { ok: true, ...payload, cached: openMeteo.cached };
+    const final = finalizeOk(payload, openMeteo.cached);
+    if (final.ok) cacheSet(sharedKey, payload, NOMINATIM_CACHE_TTL_MS);
+    return final;
   }
 
   return {
@@ -113,7 +131,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
       "Fallbacks also failed:",
       photon.message,
       openMeteo.message,
-      "Allow device location to skip geocoding, or set a clearer Settings → Location.",
+      "Pick your area on the map, allow device location, or set a clearer Settings → Location in Pakistan.",
     ]
       .filter(Boolean)
       .join(" "),

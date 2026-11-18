@@ -9,26 +9,69 @@ import {
   getPlacesProvider,
   placesProviderLabel,
 } from "@/lib/places/config";
+import {
+  normalizeRadiusKm,
+  radiusKmToMeters,
+} from "@/lib/places/distance";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import type { LocationSource } from "@/lib/places/types";
 
-async function readProfileLocation(): Promise<string | null> {
-  if (!isSupabaseConfigured()) return null;
+async function readProfileLocation(): Promise<{
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}> {
+  if (!isSupabaseConfigured()) {
+    return { address: null, latitude: null, longitude: null };
+  }
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user) {
+    return { address: null, latitude: null, longitude: null };
+  }
   const supabase = await createClient();
-  const { data } = await supabase
+  const withCoords = await supabase
+    .from("profiles")
+    .select("location, location_lat, location_lng")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!withCoords.error) {
+    const lat = withCoords.data?.location_lat;
+    const lng = withCoords.data?.location_lng;
+    return {
+      address: withCoords.data?.location?.trim() || null,
+      latitude: typeof lat === "number" && Number.isFinite(lat) ? lat : null,
+      longitude: typeof lng === "number" && Number.isFinite(lng) ? lng : null,
+    };
+  }
+  const legacy = await supabase
     .from("profiles")
     .select("location")
     .eq("id", user.id)
     .maybeSingle();
-  return data?.location?.trim() || null;
+  return {
+    address: legacy.data?.location?.trim() || null,
+    latitude: null,
+    longitude: null,
+  };
+}
+
+function parseLocationSource(raw: string | null): LocationSource | null {
+  if (
+    raw === "saved" ||
+    raw === "device" ||
+    raw === "profile" ||
+    raw === "query"
+  ) {
+    return raw;
+  }
+  return null;
 }
 
 /**
  * Live nearby recommendations.
  * Provider: OpenStreetMap by default; Google Places when GOOGLE_MAPS_API_KEY is set.
- * Never returns sample/fake store data.
+ * Never returns sample/fake store data. Overpass queries are radius-only.
  */
 export async function GET(request: Request) {
   await connection();
@@ -37,16 +80,57 @@ export async function GET(request: Request) {
   const lngRaw = url.searchParams.get("lng");
   const q = url.searchParams.get("q")?.trim() || "";
   const refresh = url.searchParams.get("refresh") === "1";
+  const addressOverride = url.searchParams.get("address")?.trim() || "";
+  const labelOverride = url.searchParams.get("label")?.trim() || "";
+  const radiusKm = normalizeRadiusKm(
+    Number(url.searchParams.get("radiusKm") ?? "3")
+  );
+  const locationSourceParam = parseLocationSource(
+    url.searchParams.get("source")
+  );
   const latitude = latRaw != null && latRaw !== "" ? Number(latRaw) : null;
   const longitude = lngRaw != null && lngRaw !== "" ? Number(lngRaw) : null;
 
   const provider = getPlacesProvider();
-  const address = await readProfileLocation();
+  const profile = await readProfileLocation();
+
+  const hasRequestCoords =
+    latitude != null &&
+    longitude != null &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude);
+
+  // Priority when client omits coords: saved profile point → Settings city text.
+  const resolvedLat = hasRequestCoords
+    ? latitude
+    : locationSourceParam === "profile"
+      ? null
+      : profile.latitude;
+  const resolvedLng = hasRequestCoords
+    ? longitude
+    : locationSourceParam === "profile"
+      ? null
+      : profile.longitude;
+  const address =
+    addressOverride ||
+    profile.address ||
+    null;
+  const locationSource: LocationSource | null =
+    locationSourceParam ??
+    (hasRequestCoords
+      ? "device"
+      : resolvedLat != null && resolvedLng != null
+        ? "saved"
+        : "profile");
+
   const baseInput = {
-    latitude,
-    longitude,
+    latitude: resolvedLat,
+    longitude: resolvedLng,
     address,
+    radiusMeters: radiusKmToMeters(radiusKm),
     bypassCache: refresh,
+    locationSource,
+    locationLabel: labelOverride || profile.address || addressOverride || null,
   };
 
   const live = q
@@ -58,7 +142,9 @@ export async function GET(request: Request) {
       {
         ...live,
         providerLabel: placesProviderLabel(live.provider),
+        radiusKm,
         sections: emptySections(),
+        onlineQuery: q || null,
       },
       { status: 422 }
     );
@@ -68,6 +154,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ...live,
     providerLabel: placesProviderLabel(provider),
+    radiusKm,
+    onlineQuery: q || null,
     sections: {
       nearbyStores: sections.nearby,
       bestLocalOptions: sections.bestLocal,

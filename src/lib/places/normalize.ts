@@ -83,6 +83,7 @@ export function normalizePlace(
     mapsUrl: place.googleMapsUri ?? null,
     phone: place.nationalPhoneNumber ?? place.internationalPhoneNumber ?? null,
     location,
+    distanceMeters: null,
     delivery: deliveryFromPlace(place),
     verifiedProductPrice: null,
     source: "Google Places",

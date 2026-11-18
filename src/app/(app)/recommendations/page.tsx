@@ -22,7 +22,7 @@ import {
   getBillPlaceMatches,
   getDismissedRecommendationKeys,
   getInitialLivePlaces,
-  getProfileLocation,
+  getProfileSearchLocation,
   getSavedRecommendationKeys,
   getSavedRecommendations,
 } from "@/lib/recommendations/queries";
@@ -53,7 +53,7 @@ async function RecommendationsContent() {
           getSavedRecommendations(),
           getSavedRecommendationKeys(),
           getDismissedRecommendationKeys(),
-          getProfileLocation(),
+          getProfileSearchLocation(),
           getInitialLivePlaces(),
           getBillPlaceMatches(),
         ])
@@ -61,7 +61,7 @@ async function RecommendationsContent() {
           [],
           new Set<string>(),
           new Set<string>(),
-          null,
+          { label: null, latitude: null, longitude: null },
           await getInitialLivePlaces(),
           [],
         ];
@@ -75,7 +75,7 @@ async function RecommendationsContent() {
         <CardDescription>
           Nearby stores via {providerLabel}
           {provider === "osm" ? " (default, free)" : " (GOOGLE_MAPS_API_KEY)"}.
-          No sample catalogs, no invented prices, no cart or checkout.
+          Pakistan radius search only — no sample catalogs or invented prices.
         </CardDescription>
       </CardHeader>
       <CardContent>

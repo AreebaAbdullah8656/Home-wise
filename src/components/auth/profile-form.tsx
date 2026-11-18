@@ -70,11 +70,29 @@ export function ProfileForm({ profile, email }: ProfileFormProps) {
           id="location"
           name="location"
           defaultValue={profile.location ?? ""}
-          placeholder="City or area"
+          placeholder="e.g. Wapda Town, Gujranwala"
           disabled={pending}
         />
+        <input
+          type="hidden"
+          name="location_lat"
+          defaultValue={
+            profile.location_lat != null ? String(profile.location_lat) : ""
+          }
+        />
+        <input
+          type="hidden"
+          name="location_lng"
+          defaultValue={
+            profile.location_lng != null ? String(profile.location_lng) : ""
+          }
+        />
         <p className="text-xs text-muted-foreground">
-          Optional. Used later for nearby-shop features if you enable them.
+          Optional Pakistan city/area. Confirm exact coords from Smart
+          Recommendations area picker to search nearby shops.
+          {profile.location_lat != null && profile.location_lng != null
+            ? ` Saved point: ${profile.location_lat.toFixed(5)}, ${profile.location_lng.toFixed(5)}.`
+            : ""}
         </p>
       </div>
 

@@ -13,6 +13,7 @@ import {
   googleMapsSearchUrl,
   hasUsablePlaceName,
 } from "@/lib/places/maps-search";
+import { formatDistanceKm } from "@/lib/places/distance";
 import type { LivePlace } from "@/lib/places/types";
 
 const initial: ActionState = {};
@@ -52,6 +53,7 @@ export function PlaceCard({
   if (!hasUsablePlaceName(place.name)) return null;
 
   const typeLabel = formatPlaceTypeLabel(place.primaryType);
+  const distanceLabel = formatDistanceKm(place.distanceMeters);
   const mapsHref = googleMapsSearchUrl({
     name: place.name,
     location: place.location,
@@ -74,6 +76,9 @@ export function PlaceCard({
             {typeLabel ? (
               <span className="text-xs text-muted-foreground">{typeLabel}</span>
             ) : null}
+            {distanceLabel ? (
+              <span className="text-xs text-muted-foreground">{distanceLabel}</span>
+            ) : null}
             {saved ? <Badge variant="secondary">Saved</Badge> : null}
           </div>
         </a>
@@ -84,6 +89,9 @@ export function PlaceCard({
           </h3>
           {typeLabel ? (
             <span className="text-xs text-muted-foreground">{typeLabel}</span>
+          ) : null}
+          {distanceLabel ? (
+            <span className="text-xs text-muted-foreground">{distanceLabel}</span>
           ) : null}
           {saved ? <Badge variant="secondary">Saved</Badge> : null}
         </div>
