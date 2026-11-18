@@ -290,40 +290,51 @@ export function DiscoveryPanel({
     [provider, radiusKm]
   );
 
-  // Boot from saved profile / localStorage, else Settings text.
+  // Boot nearby search once: prefer saved coords, else Settings city text.
   useEffect(() => {
-    const profileSaved: SavedCenter | null =
-      profileLocation.latitude != null && profileLocation.longitude != null
-        ? {
-            latitude: profileLocation.latitude,
-            longitude: profileLocation.longitude,
-            label: profileLocation.label ?? "Saved area",
-          }
-        : null;
-    const savedPoint = profileSaved ?? readLocalSaved();
+    let cancelled = false;
+    void (async () => {
+      // Yield so boot setState is not synchronous inside the effect body.
+      await Promise.resolve();
+      if (cancelled) return;
 
-    if (savedPoint) {
-      setActiveCenter(savedPoint);
-      setAreaText(savedPoint.label);
-      setLocationSource("saved");
-      void loadLive({
-        lat: savedPoint.latitude,
-        lng: savedPoint.longitude,
-        label: savedPoint.label,
-        source: "saved",
-        refresh: true,
-      });
-      return;
-    }
+      const profileSaved: SavedCenter | null =
+        profileLocation.latitude != null && profileLocation.longitude != null
+          ? {
+              latitude: profileLocation.latitude,
+              longitude: profileLocation.longitude,
+              label: profileLocation.label ?? "Saved area",
+            }
+          : null;
+      const savedPoint = profileSaved ?? readLocalSaved();
 
-    if (profileLocation.label) {
-      setAreaText(profileLocation.label);
-      void loadLive({
-        address: profileLocation.label,
-        source: "profile",
-        refresh: true,
-      });
-    }
+      if (savedPoint) {
+        setActiveCenter(savedPoint);
+        setAreaText(savedPoint.label);
+        setLocationSource("saved");
+        await loadLive({
+          lat: savedPoint.latitude,
+          lng: savedPoint.longitude,
+          label: savedPoint.label,
+          source: "saved",
+          refresh: true,
+        });
+        return;
+      }
+
+      if (profileLocation.label) {
+        setAreaText(profileLocation.label);
+        await loadLive({
+          address: profileLocation.label,
+          source: "profile",
+          refresh: true,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

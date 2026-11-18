@@ -49,7 +49,6 @@ export const getGroceryItems = cache(async () => {
 });
 
 export function computeGroceryTotals(items: GroceryItemRow[]): GroceryTotals {
-  let estimatedTotal = 0;
   let actualTotal = 0;
   let pendingCount = 0;
   let purchasedCount = 0;
@@ -62,7 +61,6 @@ export function computeGroceryTotals(items: GroceryItemRow[]): GroceryTotals {
       actualTotal += act > 0 ? act : est;
     } else {
       pendingCount += 1;
-      estimatedTotal += est;
     }
   }
 

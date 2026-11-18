@@ -596,3 +596,36 @@ Inspect the current workspace, explain the development plan, propose the folder 
 Do not overwrite existing files without checking them.
 
 Build HomeWise as a professional, secure, easy-to-use household budget and money-saving assistant.
+
+---
+
+## PHASE 10 — IMPLEMENTATION CHECKLIST (2026-11-18)
+
+Canonical matrix: `docs/SPEC-checklist.md` (done / partial / skipped).
+
+| Area | Status |
+|------|--------|
+| Product identity (not e-commerce) | done |
+| UI/UX responsive shell | done |
+| Dashboard | done |
+| Budget + categories | done |
+| Budget push/email alerts | partial |
+| Manual expenses | done |
+| NL expenses (Gemini) | done |
+| Optional bill OCR + My Bills | done |
+| Savings & emergency | done |
+| Grocery (no duplicate expense) | done |
+| Inventory | done |
+| Reports (never auto-open) | done |
+| Saving tips + bookmarks | done |
+| AI personalized tips | done |
+| Live Recommendations (OSM / optional Google) | partial (no deal/price claims) |
+| Auth email/password only | done |
+| Settings profile / PKR / location | done |
+| Notification/privacy preference panels | partial |
+| Currency threaded through all UI | partial |
+| RLS + private bill storage | done |
+| README / env example / no secrets | done |
+| Automated E2E test suite | skipped (manual + tsc/lint/build) |
+| Social login / magic link | skipped |
+| Cart / checkout / invented prices | skipped |

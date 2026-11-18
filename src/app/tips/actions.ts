@@ -106,9 +106,11 @@ export async function toggleTipBookmark(
 }
 
 export async function refreshPersonalizedTips(
-  _prev: ActionState,
-  _formData?: FormData
+  _prev: ActionState = {},
+  _formData: FormData = new FormData()
 ): Promise<ActionState> {
+  void _prev;
+  void _formData;
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
