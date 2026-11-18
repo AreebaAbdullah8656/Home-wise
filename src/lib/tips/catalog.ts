@@ -8,11 +8,14 @@ export type TipCategory =
   | "Organization"
   | "Shopping";
 
+export type TipSource = "curated" | "ai";
+
 export type Tip = {
   key: string;
   category: TipCategory;
   title: string;
   body: string;
+  source?: TipSource;
 };
 
 /** Practical household tips — static catalog (SPEC §12). */

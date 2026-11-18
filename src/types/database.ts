@@ -468,6 +468,8 @@ export type Database = {
           user_id: string;
           tip_key: string;
           tip_title: string;
+          tip_body: string | null;
+          tip_category: string | null;
           created_at: string;
         };
         Insert: {
@@ -475,6 +477,8 @@ export type Database = {
           user_id: string;
           tip_key: string;
           tip_title: string;
+          tip_body?: string | null;
+          tip_category?: string | null;
           created_at?: string;
         };
         Update: {
@@ -482,7 +486,42 @@ export type Database = {
           user_id?: string;
           tip_key?: string;
           tip_title?: string;
+          tip_body?: string | null;
+          tip_category?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_saving_tips_cache: {
+        Row: {
+          user_id: string;
+          tips: Json;
+          generated_at: string;
+          model: string | null;
+          refresh_count: number;
+          refresh_window_start: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          tips?: Json;
+          generated_at?: string;
+          model?: string | null;
+          refresh_count?: number;
+          refresh_window_start?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          tips?: Json;
+          generated_at?: string;
+          model?: string | null;
+          refresh_count?: number;
+          refresh_window_start?: string;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

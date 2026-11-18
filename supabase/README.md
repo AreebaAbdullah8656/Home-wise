@@ -8,6 +8,8 @@ In the Supabase Dashboard → **SQL Editor**, run these files **in order**:
 2. `migrations/20261116000002_rls_policies.sql` — RLS on every table
 3. `migrations/20261116000003_storage_bills.sql` — private `bills` bucket + per-user policies
 4. `migrations/20261116000004_expenses_source_grocery.sql` — allow expense `source = 'grocery'`
+5. `migrations/20261118000005_profile_location_coords.sql` — optional lat/lng on profiles (Recommendations)
+6. `migrations/20261118000006_ai_saving_tips.sql` — AI saving tips cache + bookmark snapshots
 
 ## Auth settings
 

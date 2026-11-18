@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
-import { getTipByKey } from "@/lib/tips/catalog";
+import { getTipByKey, TIP_CATEGORIES, type TipCategory } from "@/lib/tips/catalog";
+import { refreshAiSavingTips } from "@/lib/tips/ai-tips";
 
 export type ActionState = {
   error?: string;
@@ -22,6 +23,10 @@ async function requireUser() {
   return { user } as const;
 }
 
+function isTipCategory(value: string): value is TipCategory {
+  return (TIP_CATEGORIES as string[]).includes(value);
+}
+
 export async function toggleTipBookmark(
   _prev: ActionState,
   formData: FormData
@@ -30,8 +35,22 @@ export async function toggleTipBookmark(
   if ("error" in auth) return { error: auth.error };
 
   const tipKey = String(formData.get("tip_key") ?? "").trim();
-  const tip = getTipByKey(tipKey);
-  if (!tip) return { error: "Unknown tip." };
+  if (!tipKey) return { error: "Unknown tip." };
+
+  const curated = getTipByKey(tipKey);
+  const isAi = tipKey.startsWith("ai-");
+  const titleFromForm = String(formData.get("tip_title") ?? "").trim();
+  const bodyFromForm = String(formData.get("tip_body") ?? "").trim();
+  const categoryFromForm = String(formData.get("tip_category") ?? "").trim();
+
+  const tipTitle = curated?.title || titleFromForm;
+  const tipBody = curated?.body || bodyFromForm || null;
+  const tipCategory =
+    curated?.category ||
+    (isTipCategory(categoryFromForm) ? categoryFromForm : null);
+
+  if (!tipTitle) return { error: "Unknown tip." };
+  if (!curated && !isAi) return { error: "Unknown tip." };
 
   try {
     const supabase = await createClient();
@@ -59,12 +78,22 @@ export async function toggleTipBookmark(
 
     const { error } = await supabase.from("bookmarked_tips").insert({
       user_id: auth.user.id,
-      tip_key: tip.key,
-      tip_title: tip.title,
+      tip_key: tipKey,
+      tip_title: tipTitle,
+      tip_body: tipBody,
+      tip_category: tipCategory,
     });
     if (error) {
-      logAuthFailure("toggleTipBookmark.insert", error);
-      return { error: formatAuthError(error) };
+      // Migration may not have snapshot columns yet — fall back to key/title only.
+      const legacy = await supabase.from("bookmarked_tips").insert({
+        user_id: auth.user.id,
+        tip_key: tipKey,
+        tip_title: tipTitle,
+      });
+      if (legacy.error) {
+        logAuthFailure("toggleTipBookmark.insert", error);
+        return { error: formatAuthError(error) };
+      }
     }
   } catch (error) {
     logAuthFailure("toggleTipBookmark", error);
@@ -74,4 +103,26 @@ export async function toggleTipBookmark(
   revalidatePath("/tips");
   revalidatePath("/dashboard");
   return { success: "Tip bookmarked." };
+}
+
+export async function refreshPersonalizedTips(
+  _prev: ActionState,
+  _formData?: FormData
+): Promise<ActionState> {
+  const auth = await requireUser();
+  if ("error" in auth) return { error: auth.error };
+
+  try {
+    const result = await refreshAiSavingTips();
+    revalidatePath("/tips");
+    revalidatePath("/dashboard");
+    if (!result.ok) return { error: result.message };
+    return { success: result.message };
+  } catch (error) {
+    logAuthFailure("refreshPersonalizedTips", error);
+    return {
+      error:
+        "Personalized tips could not be refreshed right now. Try again in a minute.",
+    };
+  }
 }

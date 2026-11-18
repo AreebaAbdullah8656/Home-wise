@@ -44,6 +44,29 @@ export const nlExpenseSchema = z.object({
 
 export type NlExpenseSuggestion = z.infer<typeof nlExpenseSchema>;
 
+export const SAVING_TIP_CATEGORIES = [
+  "Grocery",
+  "Electricity",
+  "Water",
+  "Kitchen",
+  "Cleaning",
+  "DIY",
+  "Organization",
+  "Shopping",
+] as const;
+
+export const aiSavingTipSchema = z.object({
+  category: z.enum(SAVING_TIP_CATEGORIES),
+  title: z.string().min(3).max(80),
+  body: z.string().min(12).max(320),
+});
+
+export const aiSavingTipsResponseSchema = z.object({
+  tips: z.array(aiSavingTipSchema).min(3).max(8),
+});
+
+export type AiSavingTipDraft = z.infer<typeof aiSavingTipSchema>;
+
 export const BILL_CATEGORY_HINTS = [
   "Groceries",
   "Household expenses",

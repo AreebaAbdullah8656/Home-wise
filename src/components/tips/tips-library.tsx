@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useActionState } from "react";
 import {
+  refreshPersonalizedTips,
   toggleTipBookmark,
   type ActionState,
 } from "@/app/tips/actions";
@@ -18,13 +19,23 @@ const initial: ActionState = {};
 type TipsLibraryProps = {
   tips: Tip[];
   bookmarkedKeys: string[];
+  orphanBookmarks?: Tip[];
   signedIn: boolean;
+  aiGeneratedAt?: string | null;
+  aiNotice?: string | null;
+  refreshRemainingToday?: number;
+  geminiReady?: boolean;
 };
 
 export function TipsLibrary({
   tips,
   bookmarkedKeys,
+  orphanBookmarks = [],
   signedIn,
+  aiGeneratedAt = null,
+  aiNotice = null,
+  refreshRemainingToday = 0,
+  geminiReady = false,
 }: TipsLibraryProps) {
   const [category, setCategory] = useState<TipCategory | "all" | "bookmarked">(
     "all"
@@ -46,17 +57,77 @@ export function TipsLibrary({
     },
     initial
   );
+  const [refreshState, refreshAction, refreshPending] = useActionState(
+    refreshPersonalizedTips,
+    initial
+  );
 
   const visible = useMemo(() => {
     if (category === "bookmarked") {
-      return tips.filter((t) => bookmarks.has(t.key));
+      const fromLibrary = tips.filter((t) => bookmarks.has(t.key));
+      const known = new Set(fromLibrary.map((t) => t.key));
+      const orphans = orphanBookmarks.filter(
+        (t) => bookmarks.has(t.key) && !known.has(t.key)
+      );
+      return [...fromLibrary, ...orphans];
     }
     if (category === "all") return tips;
     return tips.filter((t) => t.category === category);
-  }, [tips, category, bookmarks]);
+  }, [tips, category, bookmarks, orphanBookmarks]);
+
+  const aiCount = tips.filter((t) => t.source === "ai").length;
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm text-accent-foreground">
+        <p>
+          Curated household tips stay available as a baseline.
+          {aiCount > 0
+            ? ` ${aiCount} personalized tip${aiCount === 1 ? "" : "s"} labeled AI-generated.`
+            : " Personalized tips appear when Gemini is configured and you are signed in."}
+        </p>
+        {aiGeneratedAt ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Last personalized refresh{" "}
+            {new Date(aiGeneratedAt).toLocaleString()}. Auto-refresh at most
+            once per week.
+          </p>
+        ) : null}
+        {aiNotice ? (
+          <p className="mt-1 text-xs text-muted-foreground">{aiNotice}</p>
+        ) : null}
+        {signedIn ? (
+          <form action={refreshAction} className="mt-3">
+            <Button
+              type="submit"
+              size="sm"
+              variant="secondary"
+              disabled={
+                refreshPending || !geminiReady || refreshRemainingToday <= 0
+              }
+            >
+              {refreshPending
+                ? "Refreshing…"
+                : `Refresh tips (${refreshRemainingToday} left today)`}
+            </Button>
+          </form>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Sign in for personalized tips based on your spending patterns.
+          </p>
+        )}
+        {refreshState.error ? (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            {refreshState.error}
+          </p>
+        ) : null}
+        {refreshState.success ? (
+          <p className="mt-2 text-sm" role="status">
+            {refreshState.success}
+          </p>
+        ) : null}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -120,6 +191,9 @@ export function TipsLibrary({
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{tip.category}</Badge>
+                    {tip.source === "ai" ? (
+                      <Badge variant="secondary">AI-generated</Badge>
+                    ) : null}
                     {bookmarked ? (
                       <Badge variant="secondary">Bookmarked</Badge>
                     ) : null}
@@ -132,6 +206,13 @@ export function TipsLibrary({
                 {signedIn ? (
                   <form action={action}>
                     <input type="hidden" name="tip_key" value={tip.key} />
+                    <input type="hidden" name="tip_title" value={tip.title} />
+                    <input type="hidden" name="tip_body" value={tip.body} />
+                    <input
+                      type="hidden"
+                      name="tip_category"
+                      value={tip.category}
+                    />
                     <Button
                       type="submit"
                       size="sm"
