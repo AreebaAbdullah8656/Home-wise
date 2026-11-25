@@ -26,7 +26,7 @@ import {
   monthStartIso,
   toNumber,
 } from "@/lib/budget-math";
-import { formatPkr } from "@/lib/format";
+import { getServerMoney } from "@/lib/currency/server";
 
 export const metadata: Metadata = { title: "My Budget" };
 
@@ -63,11 +63,12 @@ async function BudgetContent() {
   }
 
   const yearMonth = monthStartIso();
-  const [budget, categories, spendMap, totalExpenses] = await Promise.all([
+  const [budget, categories, spendMap, totalExpenses, money] = await Promise.all([
     getMonthlyBudget(yearMonth),
     getCategoriesForUser(),
     getCategorySpendMap(yearMonth),
     getMonthExpenseTotal(yearMonth),
+    getServerMoney(),
   ]);
 
   const overview = computeBudgetOverview({
@@ -103,13 +104,13 @@ async function BudgetContent() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="Total budget" value={formatPkr(overview.totalBudget)} />
+            <Metric label="Total budget" value={money.format(overview.totalBudget)} />
             <Metric
               label="Available to spend"
-              value={formatPkr(overview.spendingBudget)}
+              value={money.format(overview.spendingBudget)}
             />
-            <Metric label="Expenses so far" value={formatPkr(overview.totalExpenses)} />
-            <Metric label="Remaining" value={formatPkr(overview.remaining)} />
+            <Metric label="Expenses so far" value={money.format(overview.totalExpenses)} />
+            <Metric label="Remaining" value={money.format(overview.remaining)} />
           </div>
           <BudgetForm yearMonth={yearMonth} budget={budget} />
         </CardContent>

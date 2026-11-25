@@ -6,7 +6,7 @@ import { ExpenseForm } from "@/components/expenses/expense-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import type { CategoryRow, ExpenseWithCategory } from "@/lib/finance/queries";
 
 type ExpenseListProps = {
@@ -26,6 +26,7 @@ export function ExpenseList({
   initialFrom = "",
   initialTo = "",
 }: ExpenseListProps) {
+  const { format } = useMoney();
   const [search, setSearch] = useState(initialSearch);
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [from, setFrom] = useState(initialFrom);
@@ -141,7 +142,7 @@ export function ExpenseList({
                   </div>
                   <div className="flex flex-col items-start gap-2 sm:items-end">
                     <p className="font-heading text-xl font-semibold">
-                      {formatPkr(Number(expense.amount))}
+                      {format(Number(expense.amount))}
                     </p>
                     <div className="flex gap-2">
                       <Button

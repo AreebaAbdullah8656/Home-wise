@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber, todayIso } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 export type ActionState = {
@@ -26,15 +27,20 @@ async function requireUser() {
   return { user } as const;
 }
 
-function parseItemFields(formData: FormData) {
+async function parseItemFields(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const quantity = String(formData.get("quantity") ?? "").trim() || null;
   const estimatedPriceRaw = String(formData.get("estimated_price") ?? "").trim();
   const actualPriceRaw = String(formData.get("actual_price") ?? "").trim();
   const priority = String(formData.get("priority") ?? "normal").trim();
   const estimated_price =
-    estimatedPriceRaw === "" ? null : toNumber(estimatedPriceRaw);
-  const actual_price = actualPriceRaw === "" ? null : toNumber(actualPriceRaw);
+    estimatedPriceRaw === ""
+      ? null
+      : await displayInputToStored(toNumber(estimatedPriceRaw));
+  const actual_price =
+    actualPriceRaw === ""
+      ? null
+      : await displayInputToStored(toNumber(actualPriceRaw));
   return {
     name,
     quantity,
@@ -65,7 +71,7 @@ export async function createGroceryItem(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const fields = parseItemFields(formData);
+  const fields = await parseItemFields(formData);
   if (!fields.name) return { error: "Item name is required." };
   if (fields.estimated_price !== null && fields.estimated_price < 0) {
     return { error: "Estimated price cannot be negative." };
@@ -117,7 +123,7 @@ export async function updateGroceryItem(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing item id." };
 
-  const fields = parseItemFields(formData);
+  const fields = await parseItemFields(formData);
   if (!fields.name) return { error: "Item name is required." };
   if (fields.estimated_price !== null && fields.estimated_price < 0) {
     return { error: "Estimated price cannot be negative." };
@@ -219,7 +225,7 @@ export async function markGroceryPurchased(
         ? item.actual_price === null
           ? null
           : toNumber(item.actual_price)
-        : toNumber(actualRaw);
+        : await displayInputToStored(toNumber(actualRaw));
 
     let expenseId = item.expense_id;
     let expenseNote: string | undefined;

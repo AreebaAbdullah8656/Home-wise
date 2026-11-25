@@ -9,7 +9,11 @@ import {
   type BillExtraction,
 } from "@/lib/gemini/schemas";
 
-const BILL_PROMPT = `You are HomeWise OCR for household receipts in Pakistan (PKR common).
+function buildBillPrompt(currency: string) {
+  const code = (currency || "PKR").toUpperCase();
+  return `You are HomeWise OCR for household receipts.
+The user's active currency is ${code}. Prefer interpreting amounts as ${code} when symbols are missing or ambiguous.
+
 Extract structured data from this bill image or PDF.
 
 Return ONLY JSON matching:
@@ -36,7 +40,9 @@ Return ONLY JSON matching:
 
 Category suggestions should be one of: ${BILL_CATEGORY_HINTS.join(", ")}.
 If a field is unclear, use null. Do not invent prices. Amounts are numbers without currency symbols.
-Never invent discounts or taxes that are not visible.`;
+Never invent discounts or taxes that are not visible.
+Set "currency" to ${code} when the receipt does not clearly show another currency.`;
+}
 
 export type BillParseResult = {
   extraction: BillExtraction;
@@ -46,12 +52,14 @@ export type BillParseResult = {
 export async function parseBillWithGemini(input: {
   bytes: Uint8Array;
   mimeType: string;
+  currency?: string;
 }): Promise<BillParseResult> {
   const base64 = Buffer.from(input.bytes).toString("base64");
+  const prompt = buildBillPrompt(input.currency ?? "PKR");
 
   const generated = await generateContentResilient(
     [
-      { text: BILL_PROMPT },
+      { text: prompt },
       {
         inlineData: {
           mimeType: input.mimeType,

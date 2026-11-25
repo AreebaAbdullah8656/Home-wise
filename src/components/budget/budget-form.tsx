@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { monthLabel } from "@/lib/budget-math";
+import { useMoney } from "@/lib/currency/provider";
+import { monthLabel, toNumber } from "@/lib/budget-math";
 import type { MonthlyBudgetRow } from "@/lib/finance/queries";
 
 const initial: ActionState = {};
@@ -21,6 +22,8 @@ type BudgetFormProps = {
 
 export function BudgetForm({ yearMonth, budget }: BudgetFormProps) {
   const [state, action, pending] = useActionState(upsertMonthlyBudget, initial);
+  const { displayCurrency, toDisplay } = useMoney();
+  const code = displayCurrency;
 
   return (
     <form action={action} className="space-y-4">
@@ -32,39 +35,39 @@ export function BudgetForm({ yearMonth, budget }: BudgetFormProps) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="total_amount">Total monthly budget (PKR)</Label>
+          <Label htmlFor="total_amount">Total monthly budget ({code})</Label>
           <Input
             id="total_amount"
             name="total_amount"
             type="number"
             min={0}
-            step="1"
+            step="any"
             required
-            defaultValue={budget?.total_amount ?? 0}
+            defaultValue={toDisplay(toNumber(budget?.total_amount))}
             disabled={pending}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="savings_allocation">Savings allocation (PKR)</Label>
+          <Label htmlFor="savings_allocation">Savings allocation ({code})</Label>
           <Input
             id="savings_allocation"
             name="savings_allocation"
             type="number"
             min={0}
-            step="1"
-            defaultValue={budget?.savings_allocation ?? 0}
+            step="any"
+            defaultValue={toDisplay(toNumber(budget?.savings_allocation))}
             disabled={pending}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="emergency_allocation">Emergency allocation (PKR)</Label>
+          <Label htmlFor="emergency_allocation">Emergency allocation ({code})</Label>
           <Input
             id="emergency_allocation"
             name="emergency_allocation"
             type="number"
             min={0}
-            step="1"
-            defaultValue={budget?.emergency_allocation ?? 0}
+            step="any"
+            defaultValue={toDisplay(toNumber(budget?.emergency_allocation))}
             disabled={pending}
           />
         </div>

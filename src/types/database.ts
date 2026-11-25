@@ -14,6 +14,7 @@ export type Database = {
           id: string;
           display_name: string | null;
           currency: string;
+          amount_currency: string;
           location: string | null;
           location_lat: number | null;
           location_lng: number | null;
@@ -25,6 +26,7 @@ export type Database = {
           id: string;
           display_name?: string | null;
           currency?: string;
+          amount_currency?: string;
           location?: string | null;
           location_lat?: number | null;
           location_lng?: number | null;
@@ -36,6 +38,7 @@ export type Database = {
           id?: string;
           display_name?: string | null;
           currency?: string;
+          amount_currency?: string;
           location?: string | null;
           location_lat?: number | null;
           location_lng?: number | null;
@@ -522,6 +525,66 @@ export type Database = {
           refresh_window_start?: string;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      fx_rates: {
+        Row: {
+          base_currency: string;
+          quote_currency: string;
+          rate: number;
+          provider: string;
+          fetched_at: string;
+        };
+        Insert: {
+          base_currency: string;
+          quote_currency: string;
+          rate: number;
+          provider?: string;
+          fetched_at?: string;
+        };
+        Update: {
+          base_currency?: string;
+          quote_currency?: string;
+          rate?: number;
+          provider?: string;
+          fetched_at?: string;
+        };
+        Relationships: [];
+      };
+      currency_conversion_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          from_currency: string;
+          to_currency: string;
+          rate: number;
+          provider: string | null;
+          snapshot: Json;
+          created_at: string;
+          reversed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          from_currency: string;
+          to_currency: string;
+          rate: number;
+          provider?: string | null;
+          snapshot: Json;
+          created_at?: string;
+          reversed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          from_currency?: string;
+          to_currency?: string;
+          rate?: number;
+          provider?: string | null;
+          snapshot?: Json;
+          created_at?: string;
+          reversed_at?: string | null;
         };
         Relationships: [];
       };

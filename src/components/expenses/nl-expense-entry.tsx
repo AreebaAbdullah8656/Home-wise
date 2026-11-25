@@ -191,7 +191,7 @@ export function NlExpenseEntry({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="nl_amount">Amount (PKR)</Label>
+              <Label htmlFor="nl_amount">Amount</Label>
               <Input
                 id="nl_amount"
                 type="number"

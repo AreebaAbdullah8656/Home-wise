@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { categoryProgress, toNumber } from "@/lib/budget-math";
 import type { CategoryRow } from "@/lib/finance/queries";
 
@@ -22,6 +22,7 @@ type CategoryManagerProps = {
 };
 
 export function CategoryManager({ categories, spendMap }: CategoryManagerProps) {
+  const { format } = useMoney();
   const [createState, createAction, createPending] = useActionState(
     createCategory,
     initial
@@ -48,7 +49,7 @@ export function CategoryManager({ categories, spendMap }: CategoryManagerProps) 
             type="number"
             min={0}
             step="1"
-            placeholder="PKR"
+            placeholder="Limit"
             disabled={createPending}
           />
         </div>
@@ -81,9 +82,9 @@ export function CategoryManager({ categories, spendMap }: CategoryManagerProps) 
               <CategoryEditRow category={cat} />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
-                  Spent this month: {formatPkr(spent)}
+                  Spent this month: {format(spent)}
                   {cat.spending_limit != null
-                    ? ` / ${formatPkr(toNumber(cat.spending_limit))}`
+                    ? ` / ${format(toNumber(cat.spending_limit))}`
                     : " (no limit)"}
                 </span>
                 {progress.nearLimit ? (
@@ -110,6 +111,7 @@ export function CategoryManager({ categories, spendMap }: CategoryManagerProps) 
 
 function CategoryEditRow({ category }: { category: CategoryRow }) {
   const [state, action, pending] = useActionState(updateCategory, initial);
+  const { toDisplay } = useMoney();
 
   return (
     <div className="space-y-2">
@@ -136,8 +138,12 @@ function CategoryEditRow({ category }: { category: CategoryRow }) {
             name="spending_limit"
             type="number"
             min={0}
-            step="1"
-            defaultValue={category.spending_limit ?? ""}
+            step="any"
+            defaultValue={
+              category.spending_limit != null
+                ? toDisplay(toNumber(category.spending_limit))
+                : ""
+            }
             placeholder="Limit"
             disabled={pending}
           />

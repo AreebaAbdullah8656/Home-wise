@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { todayIso } from "@/lib/budget-math";
+import { useMoney } from "@/lib/currency/provider";
+import { todayIso, toNumber } from "@/lib/budget-math";
 import type { CategoryRow, ExpenseRow } from "@/lib/finance/queries";
 
 const initial: ActionState = {};
@@ -33,6 +34,8 @@ type ExpenseFormProps = {
 export function ExpenseForm({ categories, expense = null }: ExpenseFormProps) {
   const action = expense ? updateExpense : createExpense;
   const [state, formAction, pending] = useActionState(action, initial);
+  const { displayCurrency, toDisplay } = useMoney();
+  const code = displayCurrency;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -51,15 +54,17 @@ export function ExpenseForm({ categories, expense = null }: ExpenseFormProps) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="amount">Amount (PKR)</Label>
+          <Label htmlFor="amount">Amount ({code})</Label>
           <Input
             id="amount"
             name="amount"
             type="number"
-            min={1}
-            step="1"
+            min={0}
+            step="any"
             required
-            defaultValue={expense?.amount ?? ""}
+            defaultValue={
+              expense != null ? toDisplay(toNumber(expense.amount)) : ""
+            }
             disabled={pending}
           />
         </div>

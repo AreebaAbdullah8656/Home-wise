@@ -12,6 +12,7 @@ import {
   isRetryableGeminiError,
 } from "@/lib/gemini/errors";
 import { parseBillWithGemini } from "@/lib/gemini/parse-bill";
+import { getActiveCurrencyForAi } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 const ALLOWED = new Set([
@@ -81,9 +82,11 @@ export async function POST(request: Request) {
     }
 
     const buffer = new Uint8Array(await file.arrayBuffer());
+    const currency = await getActiveCurrencyForAi();
     const { extraction, meta } = await parseBillWithGemini({
       bytes: buffer,
       mimeType,
+      currency,
     });
 
     // OCR only — never persist expenses here. Client must confirm.

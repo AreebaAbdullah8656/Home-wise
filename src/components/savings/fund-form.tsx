@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useMoney } from "@/lib/currency/provider";
+import { toNumber } from "@/lib/budget-math";
 
 const initial: ActionState = {};
 
@@ -39,6 +41,8 @@ export function FundForm({
 }: FundFormProps) {
   const action = item ? updateAction : createAction;
   const [state, formAction, pending] = useActionState(action, initial);
+  const { displayCurrency, toDisplay } = useMoney();
+  const code = displayCurrency;
   const defaultName =
     item?.name ?? (kind === "emergency" ? "Emergency fund" : "");
 
@@ -61,26 +65,26 @@ export function FundForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`${kind}_target`}>Target (PKR)</Label>
+          <Label htmlFor={`${kind}_target`}>Target ({code})</Label>
           <Input
             id={`${kind}_target`}
             name="target_amount"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.target_amount ?? 0}
+            step="any"
+            defaultValue={toDisplay(toNumber(item?.target_amount))}
             disabled={pending}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`${kind}_allocated`}>Allocated (PKR)</Label>
+          <Label htmlFor={`${kind}_allocated`}>Allocated ({code})</Label>
           <Input
             id={`${kind}_allocated`}
             name="allocated_amount"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.allocated_amount ?? 0}
+            step="any"
+            defaultValue={toDisplay(toNumber(item?.allocated_amount))}
             disabled={pending}
           />
           <p className="text-xs text-muted-foreground">
@@ -88,14 +92,14 @@ export function FundForm({
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`${kind}_actual`}>Actual saved (PKR)</Label>
+          <Label htmlFor={`${kind}_actual`}>Actual saved ({code})</Label>
           <Input
             id={`${kind}_actual`}
             name="actual_amount"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.actual_amount ?? 0}
+            step="any"
+            defaultValue={toDisplay(toNumber(item?.actual_amount))}
             disabled={pending}
           />
           <p className="text-xs text-muted-foreground">

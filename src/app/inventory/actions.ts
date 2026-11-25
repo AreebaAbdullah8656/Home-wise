@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 import {
   INVENTORY_CATEGORIES,
@@ -28,7 +29,7 @@ async function requireUser() {
   return { user } as const;
 }
 
-function parseInventoryFields(formData: FormData) {
+async function parseInventoryFields(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const categoryRaw = String(formData.get("category") ?? "").trim();
   const category = (INVENTORY_CATEGORIES as readonly string[]).includes(
@@ -40,7 +41,10 @@ function parseInventoryFields(formData: FormData) {
   const purchaseDateRaw = String(formData.get("purchase_date") ?? "").trim();
   const purchase_date = purchaseDateRaw || null;
   const priceRaw = String(formData.get("price") ?? "").trim();
-  const price = priceRaw === "" ? null : toNumber(priceRaw);
+  const price =
+    priceRaw === ""
+      ? null
+      : await displayInputToStored(toNumber(priceRaw));
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const stockRaw = String(formData.get("stock_status") ?? "ok").trim();
   const stock_status = (STOCK_STATUSES as readonly string[]).includes(stockRaw)
@@ -69,7 +73,7 @@ export async function createInventoryItem(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const fields = parseInventoryFields(formData);
+  const fields = await parseInventoryFields(formData);
   if (!fields.name) return { error: "Item name is required." };
   if (fields.price !== null && fields.price < 0) {
     return { error: "Price cannot be negative." };
@@ -104,7 +108,7 @@ export async function updateInventoryItem(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing item id." };
 
-  const fields = parseInventoryFields(formData);
+  const fields = await parseInventoryFields(formData);
   if (!fields.name) return { error: "Item name is required." };
   if (fields.price !== null && fields.price < 0) {
     return { error: "Price cannot be negative." };

@@ -17,9 +17,12 @@ export type NlParseResult = {
 
 export async function parseNlExpenseWithGemini(
   text: string,
-  today = todayIso()
+  today = todayIso(),
+  currency = "PKR"
 ): Promise<NlParseResult> {
-  const prompt = `You parse household expense notes for HomeWise (Pakistan, PKR).
+  const code = (currency || "PKR").toUpperCase();
+  const prompt = `You parse household expense notes for HomeWise.
+The user's active currency is ${code}. Interpret bare amounts as ${code}.
 Today's date is ${today}.
 
 User said:
@@ -39,7 +42,7 @@ Return ONLY JSON:
 }
 
 Category should be one of: ${BILL_CATEGORY_HINTS.join(", ")}.
-If amount is missing, do not invent one — omit by failing validation only if truly absent; prefer extracting Rs./PKR numbers.
+If amount is missing, do not invent one — omit by failing validation only if truly absent; prefer extracting ${code} amounts.
 If date is relative (today/yesterday), resolve using today's date.
 Do not invent payment methods.`;
 

@@ -290,7 +290,7 @@ export function BillScanner({ geminiReady }: { geminiReady: boolean }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="total_amount">Total (PKR)</Label>
+                <Label htmlFor="total_amount">Total</Label>
                 <Input
                   id="total_amount"
                   type="number"

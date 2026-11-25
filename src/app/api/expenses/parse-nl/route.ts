@@ -12,6 +12,7 @@ import {
   isRetryableGeminiError,
 } from "@/lib/gemini/errors";
 import { parseNlExpenseWithGemini } from "@/lib/gemini/parse-nl-expense";
+import { getActiveCurrencyForAi } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 import { todayIso } from "@/lib/budget-math";
 
@@ -61,9 +62,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const currency = await getActiveCurrencyForAi();
     const { suggestion, meta } = await parseNlExpenseWithGemini(
       text,
-      todayIso()
+      todayIso(),
+      currency
     );
 
     // Suggestion only — client must confirm before save.

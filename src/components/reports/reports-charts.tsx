@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import type { CategorySpend } from "@/lib/finance/reports";
 
 const COLORS = [
@@ -39,6 +39,7 @@ export function ReportsCharts({
   weeklyComparison,
   utilizationPercent,
 }: ReportsChartsProps) {
+  const { format } = useMoney();
   const pieData =
     monthlyCategories.length > 0
       ? monthlyCategories
@@ -61,7 +62,7 @@ export function ReportsCharts({
               tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
             />
             <Tooltip
-              formatter={(value) => formatPkr(Number(value ?? 0))}
+              formatter={(value) => format(Number(value ?? 0))}
               contentStyle={{ borderRadius: 12 }}
             />
             <Bar dataKey="amount" fill="#0f766e" radius={[8, 8, 0, 0]} />
@@ -93,7 +94,7 @@ export function ReportsCharts({
               axisLine={false}
             />
             <Tooltip
-              formatter={(value) => formatPkr(Number(value ?? 0))}
+              formatter={(value) => format(Number(value ?? 0))}
               contentStyle={{ borderRadius: 12 }}
             />
             <Bar dataKey="amount" fill="#0369a1" radius={[0, 8, 8, 0]} />
@@ -127,7 +128,7 @@ export function ReportsCharts({
               ))}
             </Pie>
             <Tooltip
-              formatter={(value) => formatPkr(Number(value ?? 0))}
+              formatter={(value) => format(Number(value ?? 0))}
               contentStyle={{ borderRadius: 12 }}
             />
           </PieChart>

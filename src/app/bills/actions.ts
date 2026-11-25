@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber, todayIso } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 import { billExtractionSchema } from "@/lib/gemini/schemas";
 
@@ -87,8 +88,8 @@ export async function confirmBillScan(
     String(formData.get("purchase_date") ?? "").trim() ||
     extraction.purchase_date ||
     todayIso();
-  const totalAmount = toNumber(
-    formData.get("total_amount") ?? extraction.total_amount ?? 0
+  const totalAmount = await displayInputToStored(
+    toNumber(formData.get("total_amount") ?? extraction.total_amount ?? 0)
   );
   const notes =
     String(formData.get("notes") ?? extraction.notes ?? "").trim() || null;
@@ -147,21 +148,28 @@ export async function confirmBillScan(
       return { error: formatAuthError(billError) };
     }
 
-    const itemRows = items.map((item) => ({
-      bill_id: billId,
-      user_id: auth.user.id,
-      product_name: item.product_name,
-      quantity: item.quantity ?? 1,
-      unit_price: item.unit_price ?? null,
-      line_total:
+    const itemRows = [];
+    for (const item of items) {
+      const rawUnit = item.unit_price ?? null;
+      const rawLine =
         item.line_total ??
         (item.unit_price != null && item.quantity != null
           ? toNumber(item.unit_price) * toNumber(item.quantity)
-          : item.unit_price ?? null),
-      category_suggestion: item.category_suggestion ?? null,
-      category_id: null as string | null,
-      is_confirmed: true,
-    }));
+          : item.unit_price ?? null);
+      itemRows.push({
+        bill_id: billId,
+        user_id: auth.user.id,
+        product_name: item.product_name,
+        quantity: item.quantity ?? 1,
+        unit_price:
+          rawUnit == null ? null : await displayInputToStored(toNumber(rawUnit)),
+        line_total:
+          rawLine == null ? null : await displayInputToStored(toNumber(rawLine)),
+        category_suggestion: item.category_suggestion ?? null,
+        category_id: null as string | null,
+        is_confirmed: true,
+      });
+    }
 
     for (const row of itemRows) {
       row.category_id = await resolveCategoryId(

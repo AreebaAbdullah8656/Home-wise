@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 export type ActionState = {
@@ -24,16 +25,24 @@ async function requireUser() {
   return { user } as const;
 }
 
-function parseFundFields(formData: FormData) {
+async function parseFundFields(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
-  const target_amount = toNumber(formData.get("target_amount"));
-  const allocated_amount = toNumber(formData.get("allocated_amount"));
-  const actual_amount = toNumber(formData.get("actual_amount"));
+  const target_amount = await displayInputToStored(
+    toNumber(formData.get("target_amount"))
+  );
+  const allocated_amount = await displayInputToStored(
+    toNumber(formData.get("allocated_amount"))
+  );
+  const actual_amount = await displayInputToStored(
+    toNumber(formData.get("actual_amount"))
+  );
   const notes = String(formData.get("notes") ?? "").trim() || null;
   return { name, target_amount, allocated_amount, actual_amount, notes };
 }
 
-function validateFundFields(fields: ReturnType<typeof parseFundFields>) {
+function validateFundFields(
+  fields: Awaited<ReturnType<typeof parseFundFields>>
+) {
   if (!fields.name) return "Name is required.";
   if (
     fields.target_amount < 0 ||
@@ -59,7 +68,7 @@ export async function createSavingsGoal(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const fields = parseFundFields(formData);
+  const fields = await parseFundFields(formData);
   const invalid = validateFundFields(fields);
   if (invalid) return { error: invalid };
 
@@ -95,7 +104,7 @@ export async function updateSavingsGoal(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing goal id." };
 
-  const fields = parseFundFields(formData);
+  const fields = await parseFundFields(formData);
   const invalid = validateFundFields(fields);
   if (invalid) return { error: invalid };
 
@@ -156,7 +165,7 @@ export async function createEmergencyFund(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const fields = parseFundFields(formData);
+  const fields = await parseFundFields(formData);
   if (!fields.name) fields.name = "Emergency fund";
   const invalid = validateFundFields(fields);
   if (invalid) return { error: invalid };
@@ -193,7 +202,7 @@ export async function updateEmergencyFund(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing fund id." };
 
-  const fields = parseFundFields(formData);
+  const fields = await parseFundFields(formData);
   if (!fields.name) fields.name = "Emergency fund";
   const invalid = validateFundFields(fields);
   if (invalid) return { error: invalid };

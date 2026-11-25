@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardContent,
@@ -7,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/reports/date-range-picker";
 import { ReportsCharts } from "@/components/reports/reports-charts";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { monthLabel } from "@/lib/budget-math";
 import type { ReportsPayload } from "@/lib/finance/reports";
 
@@ -16,6 +18,7 @@ type ReportsPanelProps = {
 };
 
 export function ReportsPanel({ data }: ReportsPanelProps) {
+  const { format } = useMoney();
   const { weekly, monthly } = data;
 
   return (
@@ -33,7 +36,7 @@ export function ReportsPanel({ data }: ReportsPanelProps) {
           <p className="text-sm text-muted-foreground">
             Selected range total:{" "}
             <span className="font-medium text-foreground">
-              {formatPkr(data.rangeTotal)}
+              {format(data.rangeTotal)}
             </span>
           </p>
         </CardContent>
@@ -49,14 +52,14 @@ export function ReportsPanel({ data }: ReportsPanelProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="This week" value={formatPkr(weekly.totalExpenses)} />
+            <Stat label="This week" value={format(weekly.totalExpenses)} />
             <Stat
               label="Previous week"
-              value={formatPkr(weekly.previousTotal)}
+              value={format(weekly.previousTotal)}
             />
             <Stat
               label="Change vs previous"
-              value={formatPkr(weekly.deltaVsPrevious)}
+              value={format(weekly.deltaVsPrevious)}
               hint={
                 weekly.deltaVsPrevious > 0
                   ? "Spent more than last week"
@@ -67,15 +70,15 @@ export function ReportsPanel({ data }: ReportsPanelProps) {
             />
             <Stat
               label="Weekly savings vs share"
-              value={formatPkr(weekly.weeklySavings)}
-              hint={`Week share of spending budget: ${formatPkr(weekly.weeklyBudgetShare)}`}
+              value={format(weekly.weeklySavings)}
+              hint={`Week share of spending budget: ${format(weekly.weeklyBudgetShare)}`}
             />
           </div>
           <p className="text-sm text-muted-foreground">
             Highest category:{" "}
             <span className="font-medium text-foreground">
               {weekly.highestCategory
-                ? `${weekly.highestCategory.name} (${formatPkr(weekly.highestCategory.amount)})`
+                ? `${weekly.highestCategory.name} (${format(weekly.highestCategory.amount)})`
                 : "No spending this week"}
             </span>
           </p>
@@ -91,24 +94,24 @@ export function ReportsPanel({ data }: ReportsPanelProps) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Stat
               label="Total monthly budget"
-              value={formatPkr(monthly.totalBudget)}
+              value={format(monthly.totalBudget)}
             />
             <Stat
               label="Total expenses"
-              value={formatPkr(monthly.totalExpenses)}
+              value={format(monthly.totalExpenses)}
             />
             <Stat
               label="Remaining (spending budget)"
-              value={formatPkr(monthly.remaining)}
+              value={format(monthly.remaining)}
             />
             <Stat
               label="Savings allocation"
-              value={formatPkr(monthly.savingsAllocation)}
+              value={format(monthly.savingsAllocation)}
               hint="Set-aside — not an expense"
             />
             <Stat
               label="Emergency allocation"
-              value={formatPkr(monthly.emergencyAllocation)}
+              value={format(monthly.emergencyAllocation)}
               hint="Set-aside — not an expense"
             />
             <Stat

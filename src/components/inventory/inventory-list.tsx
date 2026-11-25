@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { toNumber } from "@/lib/budget-math";
 import { INVENTORY_CATEGORIES } from "@/lib/finance/inventory-constants";
 import type { Database } from "@/types/database";
@@ -37,6 +37,7 @@ function stockVariant(status: string) {
 }
 
 export function InventoryList({ items }: InventoryListProps) {
+  const { format } = useMoney();
   const [category, setCategory] = useState<string>("all");
   const [editing, setEditing] = useState<InventoryItemRow | null>(null);
   const [deleteState, deleteAction, deletePending] = useActionState(
@@ -129,7 +130,7 @@ export function InventoryList({ items }: InventoryListProps) {
                 <p className="text-sm text-muted-foreground">
                   Qty {toNumber(item.quantity)}
                   {item.price != null
-                    ? ` · ${formatPkr(toNumber(item.price))}`
+                    ? ` · ${format(toNumber(item.price))}`
                     : ""}
                   {item.purchase_date ? ` · Bought ${item.purchase_date}` : ""}
                 </p>

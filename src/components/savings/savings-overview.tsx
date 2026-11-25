@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Card,
@@ -7,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { monthLabel } from "@/lib/budget-math";
 import type { SavingsOverview } from "@/lib/finance/savings";
 
@@ -16,6 +18,7 @@ type SavingsOverviewCardsProps = {
 };
 
 export function SavingsOverviewCards({ overview }: SavingsOverviewCardsProps) {
+  const { format } = useMoney();
   return (
     <div className="space-y-4">
       <Card className="shadow-sm">
@@ -29,27 +32,27 @@ export function SavingsOverviewCards({ overview }: SavingsOverviewCardsProps) {
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Stat
             label="Savings goals — allocated"
-            value={formatPkr(overview.goalsAllocated)}
+            value={format(overview.goalsAllocated)}
           />
           <Stat
             label="Savings goals — actual"
-            value={formatPkr(overview.goalsActual)}
+            value={format(overview.goalsActual)}
           />
           <Stat
             label="Gap (allocated − actual)"
-            value={formatPkr(overview.goalsGap)}
+            value={format(overview.goalsGap)}
           />
           <Stat
             label="Emergency — allocated"
-            value={formatPkr(overview.emergencyAllocated)}
+            value={format(overview.emergencyAllocated)}
           />
           <Stat
             label="Emergency — actual"
-            value={formatPkr(overview.emergencyActual)}
+            value={format(overview.emergencyActual)}
           />
           <Stat
             label="Emergency gap"
-            value={formatPkr(overview.emergencyGap)}
+            value={format(overview.emergencyGap)}
           />
         </CardContent>
       </Card>
@@ -68,12 +71,12 @@ export function SavingsOverviewCards({ overview }: SavingsOverviewCardsProps) {
           <p className="text-sm text-muted-foreground">
             Budget savings allocation:{" "}
             <span className="font-medium text-foreground">
-              {formatPkr(overview.budgetSavingsAllocation)}
+              {format(overview.budgetSavingsAllocation)}
             </span>
             {" · "}
             Budget emergency allocation:{" "}
             <span className="font-medium text-foreground">
-              {formatPkr(overview.budgetEmergencyAllocation)}
+              {format(overview.budgetEmergencyAllocation)}
             </span>
           </p>
           <Button

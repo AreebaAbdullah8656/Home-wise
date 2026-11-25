@@ -71,17 +71,38 @@ async function SettingsContent() {
     );
   }
 
+  // Optional until migration 20261125000007 is applied.
+  let hasReversibleConvert = false;
+  try {
+    const { data: openConvert } = await supabase
+      .from("currency_conversion_events")
+      .select("id")
+      .eq("user_id", user.id)
+      .is("reversed_at", null)
+      .limit(1)
+      .maybeSingle();
+    hasReversibleConvert = Boolean(openConvert?.id);
+  } catch {
+    hasReversibleConvert = false;
+  }
+
   return (
     <div className="space-y-6">
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="font-heading text-xl">User profile</CardTitle>
           <CardDescription>
-            Display name, currency (PKR by default), and optional location.
+            Display name, display currency (PKR by default), and optional
+            location. Changing currency converts all money on screen at the live
+            rate.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ProfileForm profile={profile} email={user.email ?? ""} />
+          <ProfileForm
+            profile={profile}
+            email={user.email ?? ""}
+            hasReversibleConvert={hasReversibleConvert}
+          />
         </CardContent>
       </Card>
 
@@ -115,7 +136,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl">
       <PageHeader
         title="Settings"
-        description="Profile, currency (PKR default), and optional location."
+        description="Profile, display currency, live FX rate, and optional location."
       />
       <Suspense fallback={<SettingsFallback />}>
         <SettingsContent />

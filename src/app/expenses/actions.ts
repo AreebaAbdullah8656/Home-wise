@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 export type ActionState = {
@@ -22,9 +23,9 @@ async function requireUser() {
   return { user } as const;
 }
 
-function parseExpenseFields(formData: FormData) {
+async function parseExpenseFields(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
-  const amount = toNumber(formData.get("amount"));
+  const amount = await displayInputToStored(toNumber(formData.get("amount")));
   const categoryId = String(formData.get("category_id") ?? "").trim() || null;
   const expenseDate = String(formData.get("expense_date") ?? "").trim();
   const paymentMethod = String(formData.get("payment_method") ?? "").trim() || null;
@@ -39,7 +40,7 @@ export async function createExpense(
   const auth = await requireUser();
   if ("error" in auth) return { error: auth.error };
 
-  const fields = parseExpenseFields(formData);
+  const fields = await parseExpenseFields(formData);
   if (!fields.name) return { error: "Expense name is required." };
   if (fields.amount <= 0) return { error: "Amount must be greater than zero." };
   if (!fields.expenseDate) return { error: "Date is required." };
@@ -102,7 +103,7 @@ export async function updateExpense(
   if ("error" in auth) return { error: auth.error };
 
   const id = String(formData.get("id") ?? "").trim();
-  const fields = parseExpenseFields(formData);
+  const fields = await parseExpenseFields(formData);
   if (!id) return { error: "Expense id is required." };
   if (!fields.name) return { error: "Expense name is required." };
   if (fields.amount <= 0) return { error: "Amount must be greater than zero." };

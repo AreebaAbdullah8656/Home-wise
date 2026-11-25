@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { monthStartIso, toNumber } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 export type ActionState = {
@@ -31,9 +32,15 @@ export async function upsertMonthlyBudget(
 
   const yearMonth =
     String(formData.get("year_month") ?? "").trim() || monthStartIso();
-  const totalAmount = toNumber(formData.get("total_amount"));
-  const savingsAllocation = toNumber(formData.get("savings_allocation"));
-  const emergencyAllocation = toNumber(formData.get("emergency_allocation"));
+  const totalAmount = await displayInputToStored(
+    toNumber(formData.get("total_amount"))
+  );
+  const savingsAllocation = await displayInputToStored(
+    toNumber(formData.get("savings_allocation"))
+  );
+  const emergencyAllocation = await displayInputToStored(
+    toNumber(formData.get("emergency_allocation"))
+  );
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (totalAmount < 0 || savingsAllocation < 0 || emergencyAllocation < 0) {
@@ -83,7 +90,9 @@ export async function createCategory(
   const name = String(formData.get("name") ?? "").trim();
   const spendingLimitRaw = String(formData.get("spending_limit") ?? "").trim();
   const spendingLimit =
-    spendingLimitRaw === "" ? null : toNumber(spendingLimitRaw);
+    spendingLimitRaw === ""
+      ? null
+      : await displayInputToStored(toNumber(spendingLimitRaw));
 
   if (!name) return { error: "Category name is required." };
 
@@ -130,7 +139,9 @@ export async function updateCategory(
   const name = String(formData.get("name") ?? "").trim();
   const spendingLimitRaw = String(formData.get("spending_limit") ?? "").trim();
   const spendingLimit =
-    spendingLimitRaw === "" ? null : toNumber(spendingLimitRaw);
+    spendingLimitRaw === ""
+      ? null
+      : await displayInputToStored(toNumber(spendingLimitRaw));
 
   if (!id || !name) return { error: "Category id and name are required." };
 

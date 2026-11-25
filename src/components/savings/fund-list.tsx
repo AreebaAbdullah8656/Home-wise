@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { toNumber } from "@/lib/budget-math";
 
 const initial: ActionState = {};
@@ -49,6 +49,7 @@ export function FundList({
   updateAction,
   deleteAction,
 }: FundListProps) {
+  const { format } = useMoney();
   const [editing, setEditing] = useState<FundLike | null>(null);
   const [deleteState, deleteFormAction, deletePending] = useActionState(
     deleteAction,
@@ -94,8 +95,8 @@ export function FundList({
                 <div className="min-w-0 space-y-1">
                   <p className="font-medium text-foreground">{item.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    Allocated {formatPkr(allocated)} · Actual{" "}
-                    {formatPkr(actual)} · Target {formatPkr(target)} ({pct}%)
+                    Allocated {format(allocated)} · Actual{" "}
+                    {format(actual)} · Target {format(target)} ({pct}%)
                   </p>
                   {item.notes ? (
                     <p className="text-xs text-muted-foreground">{item.notes}</p>

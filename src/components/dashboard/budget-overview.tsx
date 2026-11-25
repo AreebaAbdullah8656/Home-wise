@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Card,
@@ -8,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import type { BudgetOverviewResult } from "@/lib/budget-math";
 import { monthLabel } from "@/lib/budget-math";
 
@@ -23,6 +25,7 @@ export function BudgetOverview({
   overview,
   hasBudgetRow,
 }: BudgetOverviewProps) {
+  const { format } = useMoney();
   return (
     <Card className="shadow-sm">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -49,23 +52,23 @@ export function BudgetOverview({
           </p>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Metric label="Total monthly budget" value={formatPkr(overview.totalBudget)} />
-          <Metric label="Total expenses" value={formatPkr(overview.totalExpenses)} />
-          <Metric label="Remaining to spend" value={formatPkr(overview.remaining)} />
+          <Metric label="Total monthly budget" value={format(overview.totalBudget)} />
+          <Metric label="Total expenses" value={format(overview.totalExpenses)} />
+          <Metric label="Remaining to spend" value={format(overview.remaining)} />
           <Metric
             label="Savings allocation"
-            value={formatPkr(overview.savingsAllocation)}
+            value={format(overview.savingsAllocation)}
           />
           <Metric
             label="Emergency allocation"
-            value={formatPkr(overview.emergencyAllocation)}
+            value={format(overview.emergencyAllocation)}
           />
           <Metric label="Budget used" value={`${overview.utilizationPercent}%`} />
         </div>
         <div>
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Utilization of spending budget ({formatPkr(overview.spendingBudget)})
+              Utilization of spending budget ({format(overview.spendingBudget)})
             </span>
             <span className="font-medium">{overview.utilizationPercent}%</span>
           </div>

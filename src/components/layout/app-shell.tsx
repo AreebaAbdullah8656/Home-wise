@@ -5,6 +5,7 @@ import {
   AuthSidebar,
   AuthSidebarFallback,
 } from "@/components/layout/auth-chrome";
+import { CurrencyChrome } from "@/components/layout/currency-chrome";
 import { ConfigBanner } from "@/components/shared/config-banner";
 
 /**
@@ -24,7 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
           <ConfigBanner />
-          {children}
+          <CurrencyChrome>{children}</CurrencyChrome>
         </main>
       </div>
     </div>

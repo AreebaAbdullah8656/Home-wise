@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { toNumber } from "@/lib/budget-math";
 import type { GroceryItemRow, GroceryTotals } from "@/lib/finance/grocery";
 
@@ -37,6 +37,8 @@ function priorityVariant(priority: string) {
 }
 
 export function GroceryList({ items, totals }: GroceryListProps) {
+  const { format, displayCurrency } = useMoney();
+  const code = displayCurrency;
   const [filter, setFilter] = useState<"pending" | "purchased" | "all">(
     "pending"
   );
@@ -87,12 +89,12 @@ export function GroceryList({ items, totals }: GroceryListProps) {
         <div className="text-sm text-muted-foreground">
           Est. total{" "}
           <span className="font-medium text-foreground">
-            {formatPkr(totals.estimatedTotal)}
+            {format(totals.estimatedTotal)}
           </span>
           {" · "}
           Actual purchased{" "}
           <span className="font-medium text-foreground">
-            {formatPkr(totals.actualTotal)}
+            {format(totals.actualTotal)}
           </span>
         </div>
       </div>
@@ -148,10 +150,10 @@ export function GroceryList({ items, totals }: GroceryListProps) {
                   {item.quantity ? `Qty ${item.quantity} · ` : ""}
                   Est.{" "}
                   {item.estimated_price != null
-                    ? formatPkr(toNumber(item.estimated_price))
+                    ? format(toNumber(item.estimated_price))
                     : "—"}
                   {item.actual_price != null
-                    ? ` · Actual ${formatPkr(toNumber(item.actual_price))}`
+                    ? ` · Actual ${format(toNumber(item.actual_price))}`
                     : ""}
                 </p>
               </div>
@@ -245,7 +247,7 @@ export function GroceryList({ items, totals }: GroceryListProps) {
               <input type="hidden" name="id" value={purchasing.id} />
               <div className="space-y-2">
                 <Label htmlFor="purchase_actual_price">
-                  Actual price (PKR)
+                  Actual price ({code})
                 </Label>
                 <Input
                   id="purchase_actual_price"

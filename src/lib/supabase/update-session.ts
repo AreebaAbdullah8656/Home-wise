@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv, isSupabaseConfigured } from "@/lib/supabase/config";
+import { isEmailConfirmed } from "@/lib/supabase/email-confirmed";
 
 const AUTH_ROUTES = new Set(["/login", "/register"]);
 
@@ -63,7 +64,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && AUTH_ROUTES.has(pathname)) {
+  // Block app until email is confirmed — clear the session so cookies don't linger.
+  if (user && !isEmailConfirmed(user) && isAppRoute(pathname)) {
+    await supabase.auth.signOut();
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("error", "email_unconfirmed");
+    if (user.email) {
+      redirectUrl.searchParams.set("email", user.email);
+    }
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  if (user && isEmailConfirmed(user) && AUTH_ROUTES.has(pathname)) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
     redirectUrl.search = "";

@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { INVENTORY_CATEGORIES } from "@/lib/finance/inventory-constants";
-import { todayIso } from "@/lib/budget-math";
+import { useMoney } from "@/lib/currency/provider";
+import { todayIso, toNumber } from "@/lib/budget-math";
 import type { Database } from "@/types/database";
 
 type InventoryItemRow =
@@ -26,6 +27,8 @@ type InventoryFormProps = {
 export function InventoryForm({ item = null }: InventoryFormProps) {
   const action = item ? updateInventoryItem : createInventoryItem;
   const [state, formAction, pending] = useActionState(action, initial);
+  const { displayCurrency, toDisplay } = useMoney();
+  const code = displayCurrency;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -86,14 +89,16 @@ export function InventoryForm({ item = null }: InventoryFormProps) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="inv_price">Price (PKR)</Label>
+          <Label htmlFor="inv_price">Price ({code})</Label>
           <Input
             id="inv_price"
             name="price"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.price ?? ""}
+            step="any"
+            defaultValue={
+              item?.price != null ? toDisplay(toNumber(item.price)) : ""
+            }
             disabled={pending}
           />
         </div>

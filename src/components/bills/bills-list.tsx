@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { toNumber } from "@/lib/budget-math";
 import type { BillWithItems } from "@/lib/finance/bills";
 import { BillItemSuggestions } from "@/components/recommendations/bill-item-suggestions";
@@ -42,6 +42,7 @@ export function BillsList({
   billMatches = [],
   placesConfigured = false,
 }: BillsListProps) {
+  const { format } = useMoney();
   const [search, setSearch] = useState("");
   const [store, setStore] = useState("");
   const [from, setFrom] = useState("");
@@ -184,7 +185,7 @@ export function BillsList({
                 <p className="text-sm text-muted-foreground">
                   {bill.purchase_date || "No date"}
                   {bill.total_amount != null
-                    ? ` · ${formatPkr(toNumber(bill.total_amount))}`
+                    ? ` · ${format(toNumber(bill.total_amount))}`
                     : ""}
                   {` · ${bill.bill_items?.length ?? 0} items`}
                 </p>
@@ -281,7 +282,7 @@ export function BillsList({
                     </span>
                     <span className="text-muted-foreground">
                       {item.line_total != null
-                        ? formatPkr(toNumber(item.line_total))
+                        ? format(toNumber(item.line_total))
                         : "—"}
                     </span>
                   </li>

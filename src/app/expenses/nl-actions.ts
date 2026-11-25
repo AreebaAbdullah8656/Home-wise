@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { toNumber } from "@/lib/budget-math";
+import { displayInputToStored } from "@/lib/currency/input";
 import { formatAuthError, logAuthFailure } from "@/lib/supabase/errors";
 
 export type ActionState = {
@@ -31,7 +32,7 @@ export async function confirmNlExpense(
   if ("error" in auth) return { error: auth.error };
 
   const name = String(formData.get("name") ?? "").trim();
-  const amount = toNumber(formData.get("amount"));
+  const amount = await displayInputToStored(toNumber(formData.get("amount")));
   const categoryId = String(formData.get("category_id") ?? "").trim() || null;
   const expenseDate = String(formData.get("expense_date") ?? "").trim();
   const paymentMethod =

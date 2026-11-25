@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 import {
@@ -9,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import type { ExpenseWithCategory } from "@/lib/finance/queries";
 
 type RecentTransactionsProps = {
@@ -17,6 +19,7 @@ type RecentTransactionsProps = {
 };
 
 export function RecentTransactions({ expenses }: RecentTransactionsProps) {
+  const { format } = useMoney();
   return (
     <Card className="shadow-sm">
       <CardHeader>
@@ -52,7 +55,7 @@ export function RecentTransactions({ expenses }: RecentTransactionsProps) {
                   </p>
                 </div>
                 <p className="shrink-0 font-heading font-semibold">
-                  {formatPkr(Number(expense.amount))}
+                  {format(Number(expense.amount))}
                 </p>
               </li>
             ))}

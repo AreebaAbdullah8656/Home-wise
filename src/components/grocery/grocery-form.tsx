@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useMoney } from "@/lib/currency/provider";
+import { toNumber } from "@/lib/budget-math";
 import type { GroceryItemRow } from "@/lib/finance/grocery";
 
 const initial: ActionState = {};
@@ -20,6 +22,8 @@ type GroceryFormProps = {
 export function GroceryForm({ item = null }: GroceryFormProps) {
   const action = item ? updateGroceryItem : createGroceryItem;
   const [state, formAction, pending] = useActionState(action, initial);
+  const { displayCurrency, toDisplay } = useMoney();
+  const code = displayCurrency;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -62,26 +66,34 @@ export function GroceryForm({ item = null }: GroceryFormProps) {
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="estimated_price">Estimated price (PKR)</Label>
+          <Label htmlFor="estimated_price">Estimated price ({code})</Label>
           <Input
             id="estimated_price"
             name="estimated_price"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.estimated_price ?? ""}
+            step="any"
+            defaultValue={
+              item?.estimated_price != null
+                ? toDisplay(toNumber(item.estimated_price))
+                : ""
+            }
             disabled={pending}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="actual_price">Actual price (PKR)</Label>
+          <Label htmlFor="actual_price">Actual price ({code})</Label>
           <Input
             id="actual_price"
             name="actual_price"
             type="number"
             min={0}
-            step="1"
-            defaultValue={item?.actual_price ?? ""}
+            step="any"
+            defaultValue={
+              item?.actual_price != null
+                ? toDisplay(toNumber(item.actual_price))
+                : ""
+            }
             disabled={pending}
             placeholder="Optional until purchased"
           />

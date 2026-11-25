@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Card,
@@ -8,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { formatPkr } from "@/lib/format";
+import { useMoney } from "@/lib/currency/provider";
 import { categoryProgress } from "@/lib/budget-math";
 
 type CategoryProgressRow = {
@@ -23,6 +25,7 @@ type BudgetProgressProps = {
 };
 
 export function BudgetProgress({ rows }: BudgetProgressProps) {
+  const { format } = useMoney();
   const withLimits = rows.filter((row) => row.limit != null && row.limit > 0);
   const display = (withLimits.length > 0 ? withLimits : rows).slice(0, 6);
 
@@ -55,9 +58,9 @@ export function BudgetProgress({ rows }: BudgetProgressProps) {
                 <div className="mb-2 flex items-center justify-between gap-3 text-sm">
                   <span className="font-medium">{category.name}</span>
                   <span className="text-muted-foreground">
-                    {formatPkr(category.spent)}
+                    {format(category.spent)}
                     {category.limit != null
-                      ? ` / ${formatPkr(category.limit)}`
+                      ? ` / ${format(category.limit)}`
                       : ""}
                   </span>
                 </div>
